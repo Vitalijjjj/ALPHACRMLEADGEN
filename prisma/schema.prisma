@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Lead {
+  id          String     @id @default(cuid())
+  name        String
+  instagram   String?
+  telegram    String?
+  phone       String?
+  email       String?
+  comment     String?
+  source      String?
+  geo         String?
+  niche       String?
+  amount      Float?
+  tags        String[]
+  status      LeadStatus @default(NEW)
+  lastContact DateTime?
+  remindAt    DateTime?
+  remindSent  Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tasks      Task[]
+  activities Activity[]
+  deals      Deal[]
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Deal {
+  id          String     @id @default(cuid())
+  leadId      String
+  lead        Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company     String?
+  description String?
+  budget      Float?
+  deadline    DateTime?
+  status      DealStatus @default(PLANNING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tasks      Task[]
+  activities Activity[]
+}
+
+enum DealStatus {
+  PLANNING
+  DESIGN
+  DEVELOPMENT
+  TESTING
+  COMPLETED
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  deadline    DateTime?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  assignee    String?
+  remindAt    DateTime?
+  remindSent  Boolean    @default(false)
+  leadId      String?
+  lead        Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  dealId      String?
+  deal        Deal?      @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Activity {
+  id        String       @id @default(cuid())
+  type      ActivityType
+  content   String
+  leadId    String?
+  lead      Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  dealId    String?
+  deal      Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  createdAt DateTime     @default(now())
+}
+
+enum ActivityType {
+  NOTE
+  STATUS_CHANGE
+  MESSAGE
+  CALL
+  TASK_CREATED
+  TASK_DONE
+  DEAL_CREATED
+}
+
+model Campaign {
+  id         String              @id @default(cuid())
+  name       String
+  status     CampaignStatus      @default(DRAFT)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  recipients CampaignRecipient[]
+}
+
+enum CampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
+model CampaignRecipient {
+  id                String          @id @default(cuid())
+  campaignId        String
+  campaign          Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  instagramUsername String
+  messageText       String
+  status            RecipientStatus @default(PENDING)
+  sentAt            DateTime?
+  errorMessage      String?
+  createdAt         DateTime        @default(now())
+}
+
+enum RecipientStatus {
+  PENDING
+  SENDING
+  SENT
+  ERROR
+  NOT_FOUND
+  SKIPPED
+}
