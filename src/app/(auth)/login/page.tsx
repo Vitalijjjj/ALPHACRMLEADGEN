@@ -1,36 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const res = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
+    const form = e.currentTarget;
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
-    if (res?.error) {
+    try {
+      // Get CSRF token first
+      const csrfRes = await fetch("/api/auth/csrf");
+      const { csrfToken } = await csrfRes.json();
+
+      const res = await fetch("/api/auth/callback/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ email, password, csrfToken, callbackUrl: "/" }),
+        redirect: "manual",
+      });
+
+      if (res.status === 302 || res.status === 200 || res.status === 0) {
+        router.push("/");
+        router.refresh();
+      } else {
+        setError("Невірний email або пароль");
+      }
+    } catch {
       setError("Невірний email або пароль");
-    } else {
-      router.push("/");
-      router.refresh();
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="mb-8 text-center">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold text-white mx-auto mb-5"
@@ -57,19 +71,18 @@ export default function LoginPage() {
           }}
         >
           {[
-            { id: "email", label: "Email", type: "text", value: email, onChange: setEmail, placeholder: "Admin" },
-            { id: "pass", label: "Пароль", type: "password", value: password, onChange: setPassword, placeholder: "••••••••" },
+            { name: "email", label: "Email", type: "text", placeholder: "Admin" },
+            { name: "password", label: "Пароль", type: "password", placeholder: "••••••••" },
           ].map((f) => (
-            <div key={f.id} className="space-y-2">
+            <div key={f.name} className="space-y-2">
               <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                 {f.label}
               </label>
               <input
+                name={f.name}
                 type={f.type}
-                value={f.value}
-                onChange={(e) => f.onChange(e.target.value)}
                 required
-                autoFocus={f.id === "email"}
+                autoFocus={f.name === "email"}
                 placeholder={f.placeholder}
                 className="w-full px-4 py-3 rounded-xl text-[var(--text)] text-sm placeholder:text-[var(--text-muted)] outline-none transition-all duration-200"
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
