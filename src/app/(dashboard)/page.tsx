@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { Users, Briefcase, CheckSquare, TrendingUp, ArrowUpRight } from "lucide-react";
