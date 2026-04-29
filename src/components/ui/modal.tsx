@@ -9,7 +9,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 export function Modal({ open, onClose, title, children, size = "md" }: ModalProps) {
@@ -34,13 +34,15 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
       <div
         ref={ref}
         className={cn(
-          "relative bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl w-full",
+          "relative bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl w-full flex flex-col",
+          "max-h-[92vh]",
           size === "sm" && "max-w-sm",
           size === "md" && "max-w-lg",
-          size === "lg" && "max-w-2xl"
+          size === "lg" && "max-w-2xl",
+          size === "xl" && "max-w-4xl"
         )}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] shrink-0">
           <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
           <button
             onClick={onClose}
@@ -49,7 +51,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
             <X size={16} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="overflow-y-auto p-5 flex-1">{children}</div>
       </div>
     </div>
   );

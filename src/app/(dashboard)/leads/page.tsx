@@ -311,11 +311,11 @@ export default function LeadsPage() {
       </div>
 
       {/* Modals */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Новий лід">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Новий лід" size="xl">
         <LeadForm onSave={createLead} onCancel={() => setShowCreate(false)} />
       </Modal>
 
-      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Редагувати ліда">
+      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Редагувати ліда" size="xl">
         {editLead && (
           <LeadForm
             onSave={updateLead}
