@@ -11,7 +11,5 @@ jobs:
     steps:
       - name: Trigger reminders endpoint
         run: |
-          curl -sf -X GET \
-            "https://alphacrmleadgen.vercel.app/api/reminders" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          curl -sf "https://alphacrmleadgen.vercel.app/api/reminders" \
             || echo "Reminders request failed"

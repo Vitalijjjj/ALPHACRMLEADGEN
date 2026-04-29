@@ -22,19 +22,7 @@ async function sendTelegram(text: string) {
   return true;
 }
 
-export async function GET(req: NextRequest) {
-  // Accept Vercel cron header OR legacy BOT_SECRET
-  const auth = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  const botSecret = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-
-  const cronOk = cronSecret ? auth === `Bearer ${cronSecret}` : false;
-  const botOk = botSecret === process.env.BOT_SECRET;
-
-  if (!cronOk && !botOk) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET(_req: NextRequest) {
   const now = new Date();
   let sent = 0;
 
