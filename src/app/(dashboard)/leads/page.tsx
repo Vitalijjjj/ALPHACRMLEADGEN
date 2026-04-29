@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Phone, Mail, ExternalLink, Pencil, Trash2, ChevronRight, DollarSign } from "lucide-react";
+import { Plus, Search, Phone, Mail, ExternalLink, Pencil, Trash2, ChevronRight } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import LeadDrawer from "@/components/leads/LeadDrawer";
 import { formatDistanceToNow } from "date-fns";
 import { uk } from "date-fns/locale";
+
+// Convert UTC ISO string to Europe/Warsaw (UTC+2) for datetime-local input
+function toWarsawInput(utcStr: string): string {
+  const d = new Date(new Date(utcStr).getTime() + 2 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 16);
+}
 
 interface Lead {
   id: string;
@@ -341,7 +347,7 @@ export default function LeadsPage() {
               paymentSystemCustom: "",
               usedServices: editLead.usedServices ?? [],
               projectDeadline: editLead.projectDeadline ?? "",
-              pushAt: editLead.pushAt ? editLead.pushAt.slice(0, 16) : "",
+              pushAt: editLead.pushAt ? toWarsawInput(editLead.pushAt) : "",
               pushComment: editLead.pushComment ?? "",
             }}
           />
