@@ -8,17 +8,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
 
-  const lead = await db.lead.findUnique({
-    where: { id },
-    include: {
-      tasks: { orderBy: { createdAt: "desc" } },
-      activities: { orderBy: { createdAt: "desc" } },
-      deals: true,
-    },
-  });
+  try {
+    const lead = await db.lead.findUnique({
+      where: { id },
+      include: {
+        tasks: { orderBy: { createdAt: "desc" } },
+        activities: { orderBy: { createdAt: "desc" } },
+        deals: true,
+      },
+    });
 
-  if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(lead);
+    if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(lead);
+  } catch (e) {
+    console.error("GET /api/leads/[id]:", e);
+    return NextResponse.json({ error: "DB error", detail: String(e) }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

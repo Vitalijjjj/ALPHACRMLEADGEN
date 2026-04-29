@@ -78,11 +78,17 @@ export default function LeadDrawer({
   const [saving, setSaving] = useState(false);
 
   const fetchLead = useCallback(async () => {
-    const res = await fetch(`/api/leads/${leadId}`);
-    const data: LeadDetail = await res.json();
-    setLead(data);
-    if (data.remindAt) {
-      setRemindAt(data.remindAt.slice(0, 16));
+    try {
+      const res = await fetch(`/api/leads/${leadId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: LeadDetail = await res.json();
+      setLead(data);
+      if (data.remindAt) {
+        setRemindAt(data.remindAt.slice(0, 16));
+      }
+    } catch (e) {
+      console.error("fetchLead error:", e);
+      setLead({ id: leadId, name: "Помилка завантаження", status: "NEW", tasks: [], activities: [], deals: [] } as unknown as LeadDetail);
     }
   }, [leadId]);
 
