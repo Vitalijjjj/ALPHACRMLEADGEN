@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     name, instagram, telegram, phone, email, comment, source, geo, niche, amount, tags, status,
-    siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt,
+    siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt, pushComment,
   } = body;
 
   if (!name?.trim()) {
@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
       usedServices: Array.isArray(usedServices) ? usedServices : [],
       projectDeadline: projectDeadline || null,
       pushAt: pushAt ? new Date(pushAt) : null,
+      pushComment: pushComment || null,
     },
   });
 

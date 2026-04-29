@@ -55,6 +55,7 @@ interface LeadDetail {
   projectDeadline: string | null;
   pushAt: string | null;
   pushSent: boolean;
+  pushComment: string | null;
   createdAt: string;
   tasks: Task[];
   activities: Activity[];
@@ -322,6 +323,14 @@ export default function LeadDrawer({
                       Термін: {lead.projectDeadline}
                     </span>
                   )}
+                </div>
+              )}
+
+              {/* Push comment */}
+              {lead.pushComment && (
+                <div className="bg-[var(--surface-2)] px-3 py-2 rounded-lg border-l-2" style={{ borderColor: "#f59e0b" }}>
+                  <p className="text-xs text-[var(--text-muted)] mb-1">Коментар до пушу</p>
+                  <p className="text-sm text-[var(--text)] whitespace-pre-wrap">{lead.pushComment}</p>
                 </div>
               )}
 

@@ -84,7 +84,7 @@ export async function GET(_req: NextRequest) {
       `<b>Послуга:</b> ${lead.service || "—"}\n` +
       `<b>Коли запушити:</b> ${pushDate}\n` +
       `<b>Термін проєкту:</b> ${lead.projectDeadline || "—"}\n\n` +
-      `<b>Коментар:</b>\n${lead.comment || "—"}\n\n` +
+      (lead.pushComment ? `<b>💬 Коментар до пушу:</b>\n${lead.pushComment}\n\n` : "") +
       `<b>Рекомендовано допродати:</b>\n` +
       (upsell.length > 0 ? upsell.map((s) => `• ${s}`).join("\n") : "—");
 

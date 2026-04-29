@@ -29,6 +29,7 @@ export interface LeadFormData {
   usedServices: string[];
   projectDeadline: string;
   pushAt: string;
+  pushComment: string;
 }
 
 const STATUSES = [
@@ -83,6 +84,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     usedServices: initial?.usedServices ?? [],
     projectDeadline: initial?.projectDeadline ?? "",
     pushAt: initial?.pushAt ?? "",
+    pushComment: initial?.pushComment ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -249,6 +251,11 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
               <label className={lbl}>Термін проєкту</label>
               <input value={data.projectDeadline} onChange={set("projectDeadline")} className={f} placeholder="30 днів..." />
             </div>
+          </div>
+
+          <div>
+            <label className={lbl}>Коментар до пушу</label>
+            <textarea value={data.pushComment} onChange={set("pushComment")} rows={2} className={`${f} resize-none`} placeholder="Короткий опис — буде у Telegram-повідомленні..." />
           </div>
         </div>
       </div>
