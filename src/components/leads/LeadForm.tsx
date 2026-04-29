@@ -184,7 +184,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
               <input value={data.niche} onChange={set("niche")} className={f} placeholder="e-comm..." />
             </div>
             <div>
-              <label className={lbl}>Сума ($)</label>
+              <label className={lbl}>Сума (€)</label>
               <input value={data.amount} onChange={set("amount")} type="number" min="0" step="0.01" className={f} placeholder="0" />
             </div>
           </div>

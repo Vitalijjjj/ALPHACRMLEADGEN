@@ -206,7 +206,7 @@ export default function ClientsPage() {
                   <td className="px-4 py-3 text-sm text-[var(--text-muted)]">{deal.lead.name}</td>
                   <td className="px-4 py-3"><Badge value={deal.status} /></td>
                   <td className="px-4 py-3 text-sm text-[var(--text)]">
-                    {deal.budget ? `$${deal.budget.toLocaleString()}` : "—"}
+                    {deal.budget ? `€${deal.budget.toLocaleString()}` : "—"}
                   </td>
                   <td className="px-4 py-3 text-xs text-[var(--text-muted)]">
                     {deal.deadline ? format(new Date(deal.deadline), "d MMM yyyy", { locale: uk }) : "—"}

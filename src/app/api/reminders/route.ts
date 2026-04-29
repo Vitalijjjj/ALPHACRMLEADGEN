@@ -75,7 +75,7 @@ export async function GET(_req: NextRequest) {
   for (const lead of leadsPush) {
     const upsell = ALL_UPSELL.filter((s) => !lead.usedServices.includes(s));
     const pushDate = lead.pushAt
-      ? lead.pushAt.toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", dateStyle: "short", timeStyle: "short" })
+      ? lead.pushAt.toLocaleString("uk-UA", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })
       : "—";
 
     const lines = [
@@ -86,7 +86,7 @@ export async function GET(_req: NextRequest) {
       lead.telegram    ? `<b>Telegram:</b> @${lead.telegram}` : null,
       lead.phone       ? `<b>Телефон:</b> ${lead.phone}` : null,
       lead.service     ? `<b>Послуга:</b> ${lead.service}` : null,
-      lead.amount      ? `<b>Сума:</b> $${lead.amount}` : null,
+      lead.amount      ? `<b>Сума:</b> €${lead.amount}` : null,
       `<b>Коли запушити:</b> ${pushDate}`,
       lead.projectDeadline ? `<b>Термін:</b> ${lead.projectDeadline}` : null,
       lead.siteStructure   ? `\n<b>Структура сайту:</b>\n${lead.siteStructure}` : null,

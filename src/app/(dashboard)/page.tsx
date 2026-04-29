@@ -105,7 +105,7 @@ export default async function DashboardPage() {
       color: "#22d3ee",
       glow: "rgba(34,211,238,0.35)",
       trend: stats.activePipeline > 0
-        ? `$${stats.activePipeline.toLocaleString("en-US", { maximumFractionDigits: 0 })} pipeline`
+        ? `€${stats.activePipeline.toLocaleString("en-US", { maximumFractionDigits: 0 })} pipeline`
         : "Немає активних",
     },
     {
@@ -213,7 +213,7 @@ export default async function DashboardPage() {
           {
             label: "Виграно лідів",
             value: stats.wonLeads,
-            sub: stats.wonAmount > 0 ? `$${stats.wonAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—",
+            sub: stats.wonAmount > 0 ? `€${stats.wonAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—",
             color: "#22c55e",
           },
           {
@@ -234,8 +234,8 @@ export default async function DashboardPage() {
           },
           {
             label: "Середня сума ліда",
-            value: `$${stats.avgLeadValue.toLocaleString("en-US")}`,
-            sub: `Pipeline: $${stats.activePipeline.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+            value: `€${stats.avgLeadValue.toLocaleString("en-US")}`,
+            sub: `Pipeline: €${stats.activePipeline.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
             color: "#a78bfa",
           },
         ].map((m) => (

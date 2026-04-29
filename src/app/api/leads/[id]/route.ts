@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (updateData.amount !== undefined) updateData.amount = updateData.amount ? parseFloat(updateData.amount) : null;
   if (updateData.pushAt !== undefined) {
     const raw = updateData.pushAt;
-    updateData.pushAt = raw ? new Date(raw.length === 16 ? raw + ":00+03:00" : raw) : null;
+    updateData.pushAt = raw ? new Date(raw.length === 16 ? raw + ":00+02:00" : raw) : null;
   }
   if (updateData.hasExtraLang === false) updateData.languages = null;
   if (updateData.usedServices !== undefined && !Array.isArray(updateData.usedServices)) updateData.usedServices = [];

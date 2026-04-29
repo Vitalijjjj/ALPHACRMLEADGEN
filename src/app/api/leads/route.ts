@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       paymentSystem: paymentSystem || null,
       usedServices: Array.isArray(usedServices) ? usedServices : [],
       projectDeadline: projectDeadline || null,
-      pushAt: pushAt ? new Date(pushAt.length === 16 ? pushAt + ":00+03:00" : pushAt) : null,
+      pushAt: pushAt ? new Date(pushAt.length === 16 ? pushAt + ":00+02:00" : pushAt) : null,
       pushComment: pushComment || null,
     },
   });

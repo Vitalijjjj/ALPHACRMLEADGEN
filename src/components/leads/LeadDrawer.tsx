@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, DollarSign, Video, Globe, Layers, CreditCard, TrendingUp } from "lucide-react";
+import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, Video, Globe, Layers, CreditCard, TrendingUp } from "lucide-react";
 import { ALL_UPSELL_SERVICES } from "@/components/leads/LeadForm";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -273,7 +273,7 @@ export default function LeadDrawer({
                 )}
                 {lead.amount && (
                   <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                    <DollarSign size={11} />{lead.amount.toLocaleString()}
+                    €{lead.amount.toLocaleString()}
                   </span>
                 )}
               </div>
