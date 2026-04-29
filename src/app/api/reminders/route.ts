@@ -78,15 +78,25 @@ export async function GET(_req: NextRequest) {
       ? lead.pushAt.toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", dateStyle: "short", timeStyle: "short" })
       : "—";
 
-    const message =
-      `🔔 <b>Нагадування по ліду</b>\n\n` +
-      `<b>Лід:</b> ${lead.name}\n` +
-      `<b>Послуга:</b> ${lead.service || "—"}\n` +
-      `<b>Коли запушити:</b> ${pushDate}\n` +
-      `<b>Термін проєкту:</b> ${lead.projectDeadline || "—"}\n\n` +
-      (lead.pushComment ? `<b>💬 Коментар до пушу:</b>\n${lead.pushComment}\n\n` : "") +
-      `<b>Рекомендовано допродати:</b>\n` +
-      (upsell.length > 0 ? upsell.map((s) => `• ${s}`).join("\n") : "—");
+    const lines = [
+      `🔔 <b>Нагадування по ліду</b>`,
+      ``,
+      `<b>Лід:</b> ${lead.name}`,
+      lead.instagram   ? `<b>Instagram:</b> @${lead.instagram}` : null,
+      lead.telegram    ? `<b>Telegram:</b> @${lead.telegram}` : null,
+      lead.phone       ? `<b>Телефон:</b> ${lead.phone}` : null,
+      lead.service     ? `<b>Послуга:</b> ${lead.service}` : null,
+      lead.amount      ? `<b>Сума:</b> $${lead.amount}` : null,
+      `<b>Коли запушити:</b> ${pushDate}`,
+      lead.projectDeadline ? `<b>Термін:</b> ${lead.projectDeadline}` : null,
+      lead.siteStructure   ? `\n<b>Структура сайту:</b>\n${lead.siteStructure}` : null,
+      lead.pushComment     ? `\n<b>💬 Коментар до пушу:</b>\n${lead.pushComment}` : null,
+      ``,
+      `<b>Рекомендовано допродати:</b>`,
+      upsell.length > 0 ? upsell.map((s) => `• ${s}`).join("\n") : "—",
+    ];
+
+    const message = lines.filter((l) => l !== null).join("\n");
 
     const ok = await sendTelegram(message);
     if (ok) {
