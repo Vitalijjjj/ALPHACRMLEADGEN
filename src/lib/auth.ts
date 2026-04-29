@@ -13,23 +13,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const email = credentials?.email as string;
         const password = credentials?.password as string;
 
-        console.log("[auth] authorize called, email:", email, "has_password:", !!password);
-
         if (!email || !password) return null;
 
         const adminEmail = process.env.ADMIN_EMAIL;
+        const adminPassword = process.env.ADMIN_PASSWORD;
         const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
 
-        console.log("[auth] adminEmail set:", !!adminEmail, "hashSet:", !!adminPasswordHash, "hashLen:", adminPasswordHash?.length);
+        if (!adminEmail) return null;
+        if (email !== adminEmail) return null;
 
-        if (!adminEmail || !adminPasswordHash) return null;
-        if (email !== adminEmail) {
-          console.log("[auth] email mismatch:", email, "!=", adminEmail);
-          return null;
+        // Support plain-text ADMIN_PASSWORD (preferred) or bcrypt ADMIN_PASSWORD_HASH
+        let valid = false;
+        if (adminPassword) {
+          valid = password === adminPassword;
+        } else if (adminPasswordHash) {
+          valid = await bcrypt.compare(password, adminPasswordHash);
         }
 
-        const valid = await bcrypt.compare(password, adminPasswordHash);
-        console.log("[auth] password valid:", valid);
         if (!valid) return null;
 
         return { id: "1", email: adminEmail, name: "Admin" };
