@@ -37,6 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const updateData = { ...body };
+  delete updateData.paymentSystemCustom; // not a DB field
   if (updateData.instagram) updateData.instagram = updateData.instagram.replace(/^@/, "").trim();
   if (updateData.telegram) updateData.telegram = updateData.telegram.replace(/^@/, "").trim();
   if (updateData.amount !== undefined) updateData.amount = updateData.amount ? parseFloat(updateData.amount) : null;

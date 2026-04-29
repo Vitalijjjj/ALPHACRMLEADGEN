@@ -30,6 +30,7 @@ interface Lead {
   usedServices: string[];
   projectDeadline: string | null;
   pushAt: string | null;
+  pushComment: string | null;
   createdAt: string;
   updatedAt: string;
   _count: { tasks: number; deals: number };
@@ -341,6 +342,7 @@ export default function LeadsPage() {
               usedServices: editLead.usedServices ?? [],
               projectDeadline: editLead.projectDeadline ?? "",
               pushAt: editLead.pushAt ? editLead.pushAt.slice(0, 16) : "",
+              pushComment: editLead.pushComment ?? "",
             }}
           />
         )}
