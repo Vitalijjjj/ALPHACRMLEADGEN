@@ -29,11 +29,14 @@ export default function LoginPage() {
         redirect: "manual",
       });
 
-      if (res.status === 302 || res.status === 200 || res.status === 0) {
+      const location = res.headers.get("location") ?? "";
+      const isError = location.includes("error=") || (res.status !== 302 && res.status !== 200 && res.status !== 0);
+
+      if (isError) {
+        setError("Невірний email або пароль");
+      } else {
         router.push("/");
         router.refresh();
-      } else {
-        setError("Невірний email або пароль");
       }
     } catch {
       setError("Невірний email або пароль");
