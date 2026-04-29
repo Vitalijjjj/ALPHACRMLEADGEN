@@ -40,7 +40,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (updateData.instagram) updateData.instagram = updateData.instagram.replace(/^@/, "").trim();
   if (updateData.telegram) updateData.telegram = updateData.telegram.replace(/^@/, "").trim();
   if (updateData.amount !== undefined) updateData.amount = updateData.amount ? parseFloat(updateData.amount) : null;
-  if (updateData.pushAt !== undefined) updateData.pushAt = updateData.pushAt ? new Date(updateData.pushAt) : null;
+  if (updateData.pushAt !== undefined) {
+    const raw = updateData.pushAt;
+    updateData.pushAt = raw ? new Date(raw.length === 16 ? raw + ":00+03:00" : raw) : null;
+  }
   if (updateData.hasExtraLang === false) updateData.languages = null;
   if (updateData.usedServices !== undefined && !Array.isArray(updateData.usedServices)) updateData.usedServices = [];
 
