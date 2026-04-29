@@ -41,7 +41,10 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, instagram, telegram, phone, email, comment, source, geo, niche, amount, tags, status } = body;
+  const {
+    name, instagram, telegram, phone, email, comment, source, geo, niche, amount, tags, status,
+    siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt,
+  } = body;
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -64,6 +67,14 @@ export async function POST(req: NextRequest) {
       amount: amount ? parseFloat(amount) : null,
       tags: tags ?? [],
       status: status ?? "NEW",
+      siteStructure: siteStructure || null,
+      hasExtraLang: !!hasExtraLang,
+      languages: hasExtraLang ? (languages || null) : null,
+      service: service || null,
+      paymentSystem: paymentSystem || null,
+      usedServices: Array.isArray(usedServices) ? usedServices : [],
+      projectDeadline: projectDeadline || null,
+      pushAt: pushAt ? new Date(pushAt) : null,
     },
   });
 

@@ -23,10 +23,19 @@ model Lead {
   tags        String[]
   status      LeadStatus @default(NEW)
   lastContact DateTime?
-  remindAt    DateTime?
-  remindSent  Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  remindAt         DateTime?
+  remindSent       Boolean    @default(false)
+  siteStructure    String?
+  hasExtraLang     Boolean    @default(false)
+  languages        String?
+  service          String?
+  paymentSystem    String?
+  usedServices     String[]
+  projectDeadline  String?
+  pushAt           DateTime?
+  pushSent         Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   tasks      Task[]
   activities Activity[]

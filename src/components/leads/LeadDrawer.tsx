@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, DollarSign, Video } from "lucide-react";
+import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, DollarSign, Video, Globe, Layers, CreditCard, TrendingUp } from "lucide-react";
+import { ALL_UPSELL_SERVICES } from "@/components/leads/LeadForm";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TaskForm } from "@/components/tasks/TaskForm";
@@ -45,6 +46,15 @@ interface LeadDetail {
   status: string;
   remindAt: string | null;
   remindSent: boolean;
+  siteStructure: string | null;
+  hasExtraLang: boolean;
+  languages: string | null;
+  service: string | null;
+  paymentSystem: string | null;
+  usedServices: string[];
+  projectDeadline: string | null;
+  pushAt: string | null;
+  pushSent: boolean;
   createdAt: string;
   tasks: Task[];
   activities: Activity[];
@@ -271,6 +281,87 @@ export default function LeadDrawer({
                   {lead.comment}
                 </p>
               )}
+
+              {/* Service / Payment */}
+              {lead.service && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border" style={{ color: "#a78bfa", borderColor: "rgba(167,139,250,0.3)", background: "rgba(167,139,250,0.08)" }}>
+                    <Layers size={11} />
+                    {lead.service}
+                  </span>
+                  {lead.paymentSystem && (
+                    <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border" style={{ color: "#38bdf8", borderColor: "rgba(56,189,248,0.3)", background: "rgba(56,189,248,0.08)" }}>
+                      <CreditCard size={11} />
+                      {lead.paymentSystem}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Extra language */}
+              {lead.hasExtraLang && lead.languages && (
+                <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border w-fit" style={{ color: "#fb923c", borderColor: "rgba(251,146,60,0.3)", background: "rgba(251,146,60,0.08)" }}>
+                  <Globe size={11} />
+                  {lead.languages}
+                </span>
+              )}
+
+              {/* Push / Deadline */}
+              {(lead.pushAt || lead.projectDeadline) && (
+                <div className="flex flex-wrap gap-3 pt-1">
+                  {lead.pushAt && (
+                    <span className="flex items-center gap-1 text-xs" style={{ color: lead.pushSent ? "#22c55e" : "#f59e0b" }}>
+                      <Clock size={11} />
+                      Запуск: {format(new Date(lead.pushAt), "d MMM yyyy HH:mm", { locale: uk })}
+                      {lead.pushSent && " ✓"}
+                    </span>
+                  )}
+                  {lead.projectDeadline && (
+                    <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                      <Tag size={11} />
+                      Термін: {lead.projectDeadline}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Site structure */}
+              {lead.siteStructure && (
+                <div className="bg-[var(--surface-2)] px-3 py-2 rounded-lg">
+                  <p className="text-xs text-[var(--text-muted)] mb-1">Структура сайту</p>
+                  <p className="text-sm text-[var(--text)] whitespace-pre-wrap">{lead.siteStructure}</p>
+                </div>
+              )}
+
+              {/* Used services */}
+              {lead.usedServices.length > 0 && (
+                <div>
+                  <p className="text-xs text-[var(--text-muted)] mb-1.5">Клієнт використовує</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {lead.usedServices.map((s) => (
+                      <span key={s} className="px-2 py-0.5 text-xs rounded border text-[var(--text-muted)] border-[var(--border)]">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Upsell */}
+              {(() => {
+                const upsell = ALL_UPSELL_SERVICES.filter((s) => !lead.usedServices.includes(s));
+                return upsell.length > 0 ? (
+                  <div>
+                    <p className="text-xs mb-1.5 flex items-center gap-1" style={{ color: "#22c55e" }}>
+                      <TrendingUp size={11} />
+                      Рекомендовано допродати
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {upsell.map((s) => (
+                        <span key={s} className="px-2 py-0.5 text-xs rounded border" style={{ color: "#22c55e", borderColor: "rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.06)" }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             {/* Status */}

@@ -1,57 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const ALL_UPSELL = ["Google Ads", "Target Ads", "SEO", "Google Maps", "Branding", "TikTok Ads", "Graphic Design"];
 
 async function sendTelegram(text: string) {
-  if (!BOT_TOKEN || !CHAT_ID) return;
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+  if (!BOT_TOKEN || !CHAT_ID) {
+    console.warn("[reminders] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
+    return false;
+  }
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: CHAT_ID,
-      text,
-      parse_mode: "HTML",
-    }),
+    body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "HTML" }),
   });
+  if (!res.ok) {
+    console.error("[reminders] Telegram error:", await res.text());
+    return false;
+  }
+  return true;
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (secret !== process.env.BOT_SECRET) {
+  // Accept Vercel cron header OR legacy BOT_SECRET
+  const auth = req.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+  const botSecret = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
+
+  const cronOk = cronSecret ? auth === `Bearer ${cronSecret}` : false;
+  const botOk = botSecret === process.env.BOT_SECRET;
+
+  if (!cronOk && !botOk) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const now = new Date();
-
-  const [tasks, leads] = await Promise.all([
-    db.task.findMany({
-      where: { remindAt: { lte: now }, remindSent: false },
-      include: { lead: { select: { name: true } } },
-    }),
-    db.lead.findMany({
-      where: { remindAt: { lte: now }, remindSent: false },
-    }),
-  ]);
-
   let sent = 0;
+
+  // ── Task reminders (generic) ──
+  const tasks = await db.task.findMany({
+    where: { remindAt: { lte: now }, remindSent: false },
+    include: { lead: { select: { name: true } } },
+  });
 
   for (const task of tasks) {
     const who = task.lead ? ` (${task.lead.name})` : "";
-    await sendTelegram(
+    const ok = await sendTelegram(
       `🔔 <b>Нагадування про задачу</b>\n\n` +
       `📋 ${task.title}${who}\n` +
       `⚡ Пріоритет: ${task.priority}\n` +
       (task.deadline ? `📅 Дедлайн: ${task.deadline.toLocaleDateString("uk-UA")}\n` : "") +
       `\n👉 Відкрий CRM для деталей`
     );
-    await db.task.update({ where: { id: task.id }, data: { remindSent: true } });
-    sent++;
+    if (ok) {
+      await db.task.update({ where: { id: task.id }, data: { remindSent: true } });
+      sent++;
+    }
   }
 
-  for (const lead of leads) {
-    await sendTelegram(
+  // ── Lead generic reminders (remindAt) ──
+  const leadsGeneric = await db.lead.findMany({
+    where: { remindAt: { lte: now }, remindSent: false },
+  });
+
+  for (const lead of leadsGeneric) {
+    const ok = await sendTelegram(
       `🔔 <b>Нагадування про ліда</b>\n\n` +
       `👤 ${lead.name}\n` +
       (lead.status ? `📊 Статус: ${lead.status}\n` : "") +
@@ -59,8 +73,40 @@ export async function GET(req: NextRequest) {
       (lead.telegram ? `✈️ @${lead.telegram}\n` : "") +
       `\n👉 Відкрий CRM для деталей`
     );
-    await db.lead.update({ where: { id: lead.id }, data: { remindSent: true } });
-    sent++;
+    if (ok) {
+      await db.lead.update({ where: { id: lead.id }, data: { remindSent: true } });
+      sent++;
+    }
+  }
+
+  // ── Lead push reminders (pushAt) — детальний формат ──
+  const leadsPush = await db.lead.findMany({
+    where: { pushAt: { lte: now }, pushSent: false },
+  });
+
+  for (const lead of leadsPush) {
+    const upsell = ALL_UPSELL.filter((s) => !lead.usedServices.includes(s));
+    const pushDate = lead.pushAt
+      ? lead.pushAt.toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", dateStyle: "short", timeStyle: "short" })
+      : "—";
+
+    const message =
+      `🔔 <b>Нагадування по ліду</b>\n\n` +
+      `<b>Лід:</b> ${lead.name}\n` +
+      `<b>Послуга:</b> ${lead.service || "—"}\n` +
+      `<b>Коли запушити:</b> ${pushDate}\n` +
+      `<b>Термін проєкту:</b> ${lead.projectDeadline || "—"}\n\n` +
+      `<b>Коментар:</b>\n${lead.comment || "—"}\n\n` +
+      `<b>Рекомендовано допродати:</b>\n` +
+      (upsell.length > 0 ? upsell.map((s) => `• ${s}`).join("\n") : "—");
+
+    const ok = await sendTelegram(message);
+    if (ok) {
+      await db.lead.update({ where: { id: lead.id }, data: { pushSent: true } });
+      sent++;
+    } else {
+      console.error(`[reminders] Failed to send push reminder for lead ${lead.id}`);
+    }
   }
 
   return NextResponse.json({ ok: true, sent });

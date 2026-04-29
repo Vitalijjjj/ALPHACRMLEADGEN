@@ -22,6 +22,14 @@ interface Lead {
   niche: string | null;
   amount: number | null;
   status: string;
+  siteStructure: string | null;
+  hasExtraLang: boolean;
+  languages: string | null;
+  service: string | null;
+  paymentSystem: string | null;
+  usedServices: string[];
+  projectDeadline: string | null;
+  pushAt: string | null;
   createdAt: string;
   updatedAt: string;
   _count: { tasks: number; deals: number };
@@ -324,6 +332,15 @@ export default function LeadsPage() {
               niche: editLead.niche ?? "",
               amount: editLead.amount?.toString() ?? "",
               status: editLead.status,
+              siteStructure: editLead.siteStructure ?? "",
+              hasExtraLang: editLead.hasExtraLang ?? false,
+              languages: editLead.languages ?? "",
+              service: editLead.service ?? "",
+              paymentSystem: editLead.paymentSystem ?? "",
+              paymentSystemCustom: "",
+              usedServices: editLead.usedServices ?? [],
+              projectDeadline: editLead.projectDeadline ?? "",
+              pushAt: editLead.pushAt ? editLead.pushAt.slice(0, 16) : "",
             }}
           />
         )}
