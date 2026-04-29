@@ -1,0 +1,17 @@
+name: Send Reminders
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminders endpoint
+        run: |
+          curl -sf -X GET \
+            "https://alphacrmleadgen.vercel.app/api/reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            || echo "Reminders request failed"
