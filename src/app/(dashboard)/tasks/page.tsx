@@ -118,7 +118,11 @@ export default function TasksPage() {
     ? tasks
     : tasks.filter((t) => t.assignee === assigneeFilter);
 
-  const byStatus = (status: string) => visibleTasks.filter((t) => t.status === status);
+  const PRIORITY_ORDER: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  const byStatus = (status: string) =>
+    visibleTasks
+      .filter((t) => t.status === status)
+      .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99));
   const totalDone = visibleTasks.filter((t) => t.status === "DONE").length;
   const totalOverdue = visibleTasks.filter(
     (t) => t.status !== "DONE" && t.deadline && isPast(new Date(t.deadline))
