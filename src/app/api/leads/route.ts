@@ -11,29 +11,34 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status") ?? undefined;
   const source = searchParams.get("source") ?? undefined;
 
-  const leads = await db.lead.findMany({
-    where: {
-      ...(status ? { status } : {}),
-      ...(source ? { source } : {}),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { instagram: { contains: search, mode: "insensitive" } },
-              { telegram: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
-              { phone: { contains: search, mode: "insensitive" } },
-              { niche: { contains: search, mode: "insensitive" } },
-              { geo: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    include: { _count: { select: { tasks: true, deals: true } } },
-    orderBy: { updatedAt: "desc" },
-  });
+  try {
+    const leads = await db.lead.findMany({
+      where: {
+        ...(status ? { status } : {}),
+        ...(source ? { source } : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { instagram: { contains: search, mode: "insensitive" } },
+                { telegram: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+                { phone: { contains: search, mode: "insensitive" } },
+                { niche: { contains: search, mode: "insensitive" } },
+                { geo: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      include: { _count: { select: { tasks: true, deals: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
 
-  return NextResponse.json(leads);
+    return NextResponse.json(leads);
+  } catch (e) {
+    console.error("GET /api/leads:", e);
+    return NextResponse.json({ error: "DB error", detail: String(e) }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
