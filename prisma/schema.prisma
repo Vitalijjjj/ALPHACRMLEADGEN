@@ -21,7 +21,7 @@ model Lead {
   niche       String?
   amount      Float?
   tags        String[]
-  status      LeadStatus @default(NEW)
+  status      String     @default("NEW_LEAD")
   lastContact DateTime?
   remindAt         DateTime?
   remindSent       Boolean    @default(false)
@@ -43,13 +43,6 @@ model Lead {
   deals      Deal[]
 }
 
-enum LeadStatus {
-  NEW
-  CONTACTED
-  NEGOTIATION
-  WON
-  LOST
-}
 
 model Deal {
   id          String     @id @default(cuid())

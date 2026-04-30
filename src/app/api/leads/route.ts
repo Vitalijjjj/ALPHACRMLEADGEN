@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const leads = await db.lead.findMany({
     where: {
-      ...(status ? { status: status as never } : {}),
+      ...(status ? { status } : {}),
       ...(source ? { source } : {}),
       ...(search
         ? {
