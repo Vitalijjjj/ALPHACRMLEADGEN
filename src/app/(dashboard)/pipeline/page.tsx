@@ -115,7 +115,7 @@ function KanbanColumn({
                       {lead.name}
                     </p>
                     {lead.niche && (
-                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">{lead.niche}</p>
+                      <p className="text-xs text-[var(--text)] mt-0.5 truncate">{lead.niche}</p>
                     )}
                     {lead.instagram && (
                       <p className="flex items-center gap-0.5 text-[9px] text-[var(--text-muted)] mt-0.5">
