@@ -103,6 +103,7 @@ export default function LeadsPage() {
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [openLead, setOpenLead] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
 
   const fetchLeads = useCallback(async () => {
@@ -110,13 +111,14 @@ export default function LeadsPage() {
     if (search) params.set("q", search);
     if (statusFilter) params.set("status", statusFilter);
     const res = await fetch(`/api/leads?${params}`);
-    const data = await res.json();
-    setLeads(data);
+    if (!res.ok) return;
+    setLeads(await res.json());
     setLoading(false);
   }, [search, statusFilter]);
 
   useEffect(() => {
-    const t = setTimeout(fetchLeads, 200);
+    setSearching(true);
+    const t = setTimeout(() => fetchLeads().finally(() => setSearching(false)), 400);
     return () => clearTimeout(t);
   }, [fetchLeads]);
 
@@ -187,7 +189,10 @@ export default function LeadsPage() {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          {searching
+            ? <div className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+            : <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          }
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
