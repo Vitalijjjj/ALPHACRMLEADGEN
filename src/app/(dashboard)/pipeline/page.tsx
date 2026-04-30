@@ -115,7 +115,7 @@ function KanbanColumn({
                       {lead.name}
                     </p>
                     {lead.niche && (
-                      <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded border border-[var(--border)] text-[var(--text-muted)] bg-[var(--surface)] truncate max-w-full leading-none">
+                      <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded truncate max-w-full leading-none font-medium" style={{ color: "var(--accent)", background: "rgba(201,140,10,0.12)", border: "1px solid rgba(201,140,10,0.35)" }}>
                         {lead.niche}
                       </span>
                     )}
