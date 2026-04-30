@@ -11,6 +11,7 @@ interface Lead {
   id: string;
   name: string;
   instagram: string | null;
+  niche: string | null;
   status: string;
   source: string | null;
   _count: { tasks: number; deals: number };
@@ -26,7 +27,6 @@ const ACTIVE_COLS: ColDef[] = [
   { id: "PROPOSAL",    label: "КП",          accent: "#a78bfa" },
   { id: "INTERESTED",  label: "Цікаво",      accent: "#34d399" },
   { id: "THINKING",    label: "Думає",       accent: "#60a5fa" },
-  { id: "CLOSE",       label: "Закрити лід", accent: "#fb7185" },
 ];
 
 const WIN_COL:  ColDef = { id: "WON",  label: "Виграш",  accent: "#22c55e" };
@@ -114,6 +114,9 @@ function KanbanColumn({
                     <p className="text-[11px] font-medium text-[var(--text)] leading-snug line-clamp-2">
                       {lead.name}
                     </p>
+                    {lead.niche && (
+                      <p className="text-[9px] text-[var(--text-muted)] mt-0.5 truncate">{lead.niche}</p>
+                    )}
                     {lead.instagram && (
                       <p className="flex items-center gap-0.5 text-[9px] text-[var(--text-muted)] mt-0.5">
                         <AtSign size={8} />{lead.instagram}

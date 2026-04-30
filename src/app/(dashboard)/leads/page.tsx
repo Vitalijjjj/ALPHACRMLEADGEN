@@ -51,7 +51,6 @@ const STATUS_OPTIONS = [
   { value: "PROPOSAL",       label: "КП" },
   { value: "INTERESTED",     label: "Цікаво" },
   { value: "THINKING",       label: "Думає" },
-  { value: "CLOSE",          label: "Закрити лід" },
   { value: "WON",            label: "Виграш — Продаж" },
   { value: "NOT_INTERESTED", label: "Програш — Не цікаво" },
   { value: "DUPLICATE",      label: "Програш — Дубль" },
