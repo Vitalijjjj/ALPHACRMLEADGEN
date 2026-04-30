@@ -65,8 +65,9 @@ interface LeadDetail {
 
 const STATUSES = [
   { value: "NEW_LEAD",       label: "Новий лід",    accent: "#C98C0A" },
-  { value: "CONTACTED",      label: "Звʼязався",    accent: "#22d3ee" },
-  { value: "MISSED_CALL",    label: "Недозвон",     accent: "#f59e0b" },
+  { value: "CONTACTED",      label: "Звʼязався",      accent: "#22d3ee" },
+  { value: "CALL_BACK",      label: "Передзвонити",  accent: "#818cf8" },
+  { value: "MISSED_CALL",    label: "Недозвон",       accent: "#f59e0b" },
   { value: "TARGETED",       label: "Цільовий",     accent: "#22c55e" },
   { value: "PROPOSAL",       label: "КП",           accent: "#a78bfa" },
   { value: "INTERESTED",     label: "Цікаво",       accent: "#34d399" },

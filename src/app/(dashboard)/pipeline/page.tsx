@@ -21,8 +21,9 @@ interface ColDef { id: string; label: string; accent: string }
 
 const ACTIVE_COLS: ColDef[] = [
   { id: "NEW_LEAD",    label: "Новий лід",   accent: "#C98C0A" },
-  { id: "CONTACTED",   label: "Звʼязався",   accent: "#22d3ee" },
-  { id: "MISSED_CALL", label: "Недозвон",    accent: "#f59e0b" },
+  { id: "CONTACTED",    label: "Звʼязався",     accent: "#22d3ee" },
+  { id: "CALL_BACK",   label: "Передзвонити", accent: "#818cf8" },
+  { id: "MISSED_CALL", label: "Недозвон",     accent: "#f59e0b" },
   { id: "TARGETED",    label: "Цільовий",    accent: "#22c55e" },
   { id: "PROPOSAL",    label: "КП",          accent: "#a78bfa" },
   { id: "INTERESTED",  label: "Цікаво",      accent: "#34d399" },

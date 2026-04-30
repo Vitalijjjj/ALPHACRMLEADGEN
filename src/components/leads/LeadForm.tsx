@@ -37,6 +37,7 @@ export interface LeadFormData {
 const STATUSES = [
   { value: "NEW_LEAD",       label: "Новий лід" },
   { value: "CONTACTED",      label: "Звʼязався" },
+  { value: "CALL_BACK",      label: "Передзвонити" },
   { value: "MISSED_CALL",    label: "Недозвон" },
   { value: "TARGETED",       label: "Цільовий" },
   { value: "PROPOSAL",       label: "КП" },
