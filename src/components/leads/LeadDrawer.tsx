@@ -104,6 +104,7 @@ export default function LeadDrawer({
   const [saving, setSaving] = useState(false);
   const [phoneCopied, setPhoneCopied] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [structureEdit, setStructureEdit] = useState<string | null>(null);
 
   const fetchLead = useCallback(async () => {
     try {
@@ -383,11 +384,39 @@ export default function LeadDrawer({
                 </div>
               )}
 
-              {/* Site structure */}
-              {lead.siteStructure && (
+              {/* Site structure — inline edit on click */}
+              {(lead.siteStructure || structureEdit !== null) && (
                 <div className="bg-[var(--surface-2)] px-3 py-2 rounded-lg">
                   <p className="text-xs text-[var(--text-muted)] mb-1">Структура сайту</p>
-                  <p className="text-sm text-[var(--text)] whitespace-pre-wrap">{lead.siteStructure}</p>
+                  {structureEdit !== null ? (
+                    <textarea
+                      autoFocus
+                      value={structureEdit}
+                      onChange={(e) => setStructureEdit(e.target.value)}
+                      onBlur={async () => {
+                        await fetch(`/api/leads/${leadId}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ siteStructure: structureEdit }),
+                        });
+                        setStructureEdit(null);
+                        fetchLead();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") { setStructureEdit(null); fetchLead(); }
+                      }}
+                      rows={6}
+                      className="w-full text-sm bg-transparent text-[var(--text)] resize-y outline-none focus:outline-none whitespace-pre-wrap"
+                      style={{ border: "none", padding: 0, fontFamily: "inherit" }}
+                    />
+                  ) : (
+                    <p
+                      className="text-sm text-[var(--text)] whitespace-pre-wrap cursor-text hover:opacity-80 transition-opacity"
+                      onClick={() => setStructureEdit(lead.siteStructure ?? "")}
+                    >
+                      {lead.siteStructure}
+                    </p>
+                  )}
                 </div>
               )}
 

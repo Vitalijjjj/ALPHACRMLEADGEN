@@ -163,7 +163,6 @@ export default function Header() {
             style={{ textAlign: "right" }}
           >
             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Admin</p>
-            <p style={{ fontSize: 10, color: "var(--text-muted)" }}>SHSTKV CRM</p>
           </div>
           <div
             style={{
