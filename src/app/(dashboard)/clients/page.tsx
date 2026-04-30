@@ -22,6 +22,14 @@ interface Deal {
 
 const STATUSES = ["PLANNING", "DESIGN", "DEVELOPMENT", "TESTING", "COMPLETED"];
 
+const STATUS_LABELS: Record<string, string> = {
+  PLANNING: "Планування",
+  DESIGN: "Дизайн",
+  DEVELOPMENT: "Розробка",
+  TESTING: "Тестування",
+  COMPLETED: "Завершено",
+};
+
 function DealForm({
   onSave, onCancel, leads, initial,
 }: {
@@ -69,7 +77,7 @@ function DealForm({
             placeholder="Назва клієнта" />
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-[var(--text-muted)]">Бюджет ($)</label>
+          <label className="text-xs text-[var(--text-muted)]">Бюджет (€)</label>
           <input type="number" value={data.budget} onChange={set("budget")}
             className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
             placeholder="0" />
@@ -83,7 +91,7 @@ function DealForm({
           <label className="text-xs text-[var(--text-muted)]">Статус</label>
           <select value={data.status} onChange={set("status")}
             className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
           </select>
         </div>
       </div>
@@ -95,7 +103,7 @@ function DealForm({
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">Скасувати</button>
-        <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg transition-colors disabled:opacity-50 cursor-pointer">
+        <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-black rounded-lg transition-colors disabled:opacity-50 cursor-pointer">
           {saving ? "..." : "Зберегти"}
         </button>
       </div>
@@ -131,14 +139,16 @@ export default function ClientsPage() {
   }, [fetchAll]);
 
   async function createDeal(data: Record<string, unknown>) {
-    await fetch("/api/deals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const res = await fetch("/api/deals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (!res.ok) { alert("Помилка при створенні клієнта"); return; }
     setShowCreate(false);
     fetchAll();
   }
 
   async function updateDeal(data: Record<string, unknown>) {
     if (!editDeal) return;
-    await fetch(`/api/deals/${editDeal.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const res = await fetch(`/api/deals/${editDeal.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (!res.ok) { alert("Помилка при збереженні"); return; }
     setEditDeal(null);
     fetchAll();
   }
@@ -157,7 +167,7 @@ export default function ClientsPage() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">{deals.length} клієнтів</p>
         </div>
         <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm rounded-lg transition-colors cursor-pointer">
+          className="flex items-center gap-1.5 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-black text-sm rounded-lg transition-colors cursor-pointer">
           <Plus size={15} />Новий клієнт
         </button>
       </div>
@@ -171,8 +181,8 @@ export default function ClientsPage() {
         <div className="flex gap-1">
           {["Всі", ...STATUSES].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${statusFilter === s ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"}`}>
-              {s}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${statusFilter === s ? "bg-[var(--accent)] text-black" : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"}`}>
+              {s === "Всі" ? "Всі" : STATUS_LABELS[s]}
             </button>
           ))}
         </div>

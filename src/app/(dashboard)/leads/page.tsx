@@ -42,10 +42,23 @@ interface Lead {
   _count: { tasks: number; deals: number };
 }
 
-const STATUS_FILTERS = ["Всі", "NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
-const STATUS_LABEL: Record<string, string> = {
-  NEW: "Новий", CONTACTED: "Контакт", NEGOTIATION: "Переговори", WON: "Виграно", LOST: "Програно",
-};
+const STATUS_OPTIONS = [
+  { value: "",               label: "Всі статуси" },
+  { value: "NEW_LEAD",       label: "Новий лід" },
+  { value: "CONTACTED",      label: "Звʼязався" },
+  { value: "MISSED_CALL",    label: "Недозвон" },
+  { value: "TARGETED",       label: "Цільовий" },
+  { value: "PROPOSAL",       label: "КП" },
+  { value: "INTERESTED",     label: "Цікаво" },
+  { value: "THINKING",       label: "Думає" },
+  { value: "CLOSE",          label: "Закрити лід" },
+  { value: "WON",            label: "Виграш — Продаж" },
+  { value: "NOT_INTERESTED", label: "Програш — Не цікаво" },
+  { value: "DUPLICATE",      label: "Програш — Дубль" },
+  { value: "UNREACHABLE",    label: "Програш — Не змогли звʼязатись" },
+  { value: "NOT_TARGET",     label: "Програш — не ЦА" },
+  { value: "TOO_EXPENSIVE",  label: "Програш — Дорого" },
+];
 
 function InstagramLink({ username }: { username: string }) {
   return (
@@ -86,7 +99,7 @@ function TelegramLink({ username }: { username: string }) {
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Всі");
+  const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [openLead, setOpenLead] = useState<string | null>(null);
@@ -95,7 +108,7 @@ export default function LeadsPage() {
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
     if (search) params.set("q", search);
-    if (statusFilter !== "Всі") params.set("status", statusFilter);
+    if (statusFilter) params.set("status", statusFilter);
     const res = await fetch(`/api/leads?${params}`);
     const data = await res.json();
     setLeads(data);
@@ -108,11 +121,16 @@ export default function LeadsPage() {
   }, [fetchLeads]);
 
   async function createLead(data: LeadFormData) {
-    await fetch("/api/leads", {
+    const res = await fetch("/api/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert("Помилка створення: " + (err.detail || err.error || res.status));
+      return;
+    }
     setShowCreate(false);
     fetchLeads();
   }
@@ -151,7 +169,7 @@ export default function LeadsPage() {
             {leads.length} контактів
             {totalAmount > 0 && (
               <span className="ml-2 font-medium" style={{ color: "var(--accent)" }}>
-                · ${totalAmount.toLocaleString()} загальна сума
+                · €{totalAmount.toLocaleString()} загальна сума
               </span>
             )}
           </p>
@@ -177,22 +195,15 @@ export default function LeadsPage() {
             className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
-        <div className="flex gap-1">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer font-medium ${
-                statusFilter === s
-                  ? "text-black"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"
-              }`}
-              style={statusFilter === s ? { background: "var(--accent)" } : {}}
-            >
-              {s === "Всі" ? s : STATUS_LABEL[s] ?? s}
-            </button>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+        >
+          {STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
-        </div>
+        </select>
       </div>
 
       {/* Table */}
@@ -285,7 +296,7 @@ export default function LeadsPage() {
                   <td className="px-4 py-3">
                     {lead.amount ? (
                       <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                        ${lead.amount.toLocaleString()}
+                        €{lead.amount.toLocaleString()}
                       </span>
                     ) : (
                       <span className="text-xs text-[var(--text-dim)]">—</span>

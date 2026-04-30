@@ -37,24 +37,36 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const { leadId, company, description, budget, deadline, status } = body;
+  try {
+    const body = await req.json();
+    const { leadId, company, description, budget, deadline, status } = body;
 
-  if (!leadId) return NextResponse.json({ error: "leadId is required" }, { status: 400 });
+    if (!leadId) return NextResponse.json({ error: "leadId is required" }, { status: 400 });
 
-  const deal = await db.deal.create({
-    data: { leadId, company, description, budget, deadline, status },
-    include: { lead: { select: { id: true, name: true } } },
-  });
+    const deal = await db.deal.create({
+      data: {
+        leadId,
+        company: company || null,
+        description: description || null,
+        budget: budget ? parseFloat(String(budget)) : null,
+        deadline: deadline ? new Date(deadline) : null,
+        status: status ?? "PLANNING",
+      },
+      include: { lead: { select: { id: true, name: true } } },
+    });
 
-  await db.activity.create({
-    data: {
-      leadId,
-      dealId: deal.id,
-      type: "DEAL_CREATED",
-      content: `Клієнт створений${company ? `: ${company}` : ""}`,
-    },
-  });
+    await db.activity.create({
+      data: {
+        leadId,
+        dealId: deal.id,
+        type: "DEAL_CREATED",
+        content: `Клієнт створений${company ? `: ${company}` : ""}`,
+      },
+    });
 
-  return NextResponse.json(deal, { status: 201 });
+    return NextResponse.json(deal, { status: 201 });
+  } catch (e) {
+    console.error("POST /api/deals:", e);
+    return NextResponse.json({ error: "DB error", detail: String(e) }, { status: 500 });
+  }
 }

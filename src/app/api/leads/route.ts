@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       niche: niche || null,
       amount: amount ? parseFloat(amount) : null,
       tags: tags ?? [],
-      status: status ?? "NEW",
+      status: status ?? "NEW_LEAD",
       siteStructure: siteStructure || null,
       hasExtraLang: !!hasExtraLang,
       languages: hasExtraLang ? (languages || null) : null,
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   });
 
   await db.activity.create({
-    data: { leadId: lead.id, type: "STATUS_CHANGE", content: `Лід створено зі статусом NEW` },
+    data: { leadId: lead.id, type: "STATUS_CHANGE", content: `Лід створено зі статусом: ${lead.status}` },
   });
 
   return NextResponse.json(lead, { status: 201 });

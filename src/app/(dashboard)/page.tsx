@@ -51,8 +51,8 @@ function buildDailyData(
     const d = new Date(lead.createdAt).getDate() - 1;
     if (d < 0 || d >= maxDay) continue;
     days[d].total++;
-    if (["CONTACTED", "NEGOTIATION", "WON"].includes(lead.status)) days[d].targeted++;
-    if (lead.status === "LOST") days[d].lost++;
+    if (["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"].includes(lead.status)) days[d].targeted++;
+    if (["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"].includes(lead.status)) days[d].lost++;
     if (lead.status === "WON") days[d].won++;
   }
 
@@ -109,7 +109,7 @@ async function getStats() {
     }),
     db.lead.aggregate({ _sum: { amount: true } }),
     db.lead.count({ where: { status: "WON" } }),
-    db.lead.count({ where: { status: "LOST" } }),
+    db.lead.count({ where: { status: { in: ["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"] } } }),
     db.lead.count({ where: { createdAt: { gte: startOfMonth } } }),
     db.lead.count({ where: { createdAt: { gte: startOfLastMonth, lt: startOfMonth } } }),
     db.lead.aggregate({ _sum: { amount: true }, where: { status: "WON" } }),
@@ -133,13 +133,13 @@ async function getStats() {
     db.lead.count({
       where: {
         createdAt: { gte: startOfMonth },
-        status: { in: ["CONTACTED", "NEGOTIATION", "WON"] },
+        status: { in: ["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"] },
       },
     }),
     db.lead.count({
       where: {
         createdAt: { gte: startOfLastMonth, lt: startOfMonth },
-        status: { in: ["CONTACTED", "NEGOTIATION", "WON"] },
+        status: { in: ["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"] },
       },
     }),
   ]);
@@ -178,11 +178,23 @@ async function getStats() {
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  NEW:         { label: "Новий",       cls: "text-[#C98C0A] bg-[#C98C0A]/10 border border-[#C98C0A]/20" },
-  CONTACTED:   { label: "Контакт",    cls: "text-cyan-400 bg-cyan-400/10 border border-cyan-400/20" },
-  NEGOTIATION: { label: "Переговори", cls: "text-violet-400 bg-violet-400/10 border border-violet-400/20" },
-  WON:         { label: "Виграно",    cls: "text-green-400 bg-green-400/10 border border-green-400/20" },
-  LOST:        { label: "Програно",   cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
+  NEW:         { label: "Новий лід",   cls: "text-amber-400 bg-amber-400/10 border border-amber-400/20" },
+  NEW_LEAD:    { label: "Новий лід",   cls: "text-amber-400 bg-amber-400/10 border border-amber-400/20" },
+  CONTACTED:   { label: "Звʼязався",  cls: "text-cyan-400 bg-cyan-400/10 border border-cyan-400/20" },
+  MISSED_CALL: { label: "Недозвон",   cls: "text-orange-400 bg-orange-400/10 border border-orange-400/20" },
+  TARGETED:    { label: "Цільовий",   cls: "text-green-400 bg-green-400/10 border border-green-400/20" },
+  PROPOSAL:    { label: "КП",         cls: "text-violet-400 bg-violet-400/10 border border-violet-400/20" },
+  NEGOTIATION: { label: "КП",         cls: "text-violet-400 bg-violet-400/10 border border-violet-400/20" },
+  INTERESTED:  { label: "Цікаво",     cls: "text-teal-400 bg-teal-400/10 border border-teal-400/20" },
+  THINKING:    { label: "Думає",      cls: "text-blue-400 bg-blue-400/10 border border-blue-400/20" },
+  CLOSE:       { label: "Закрити",    cls: "text-rose-400 bg-rose-400/10 border border-rose-400/20" },
+  WON:         { label: "Виграш",     cls: "text-green-400 bg-green-400/10 border border-green-400/20" },
+  LOST:            { label: "Програш",              cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
+  NOT_INTERESTED:  { label: "Не цікаво",            cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
+  DUPLICATE:       { label: "Дубль",                cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
+  UNREACHABLE:     { label: "Не змогли звʼязатись", cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
+  NOT_TARGET:      { label: "не ЦА",                cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
+  TOO_EXPENSIVE:   { label: "Дорого",               cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
 };
 
 export default async function DashboardPage() {

@@ -60,11 +60,25 @@ interface DealStatus {
 }
 
 const STATUS_COLORS: Record<string, string> = {
+  // legacy
   NEW: "#C98C0A",
-  CONTACTED: "#22d3ee",
   NEGOTIATION: "#a78bfa",
-  WON: "#C98C0A",
   LOST: "#f87171",
+  // current
+  NEW_LEAD:      "#C98C0A",
+  CONTACTED:     "#22d3ee",
+  MISSED_CALL:   "#f59e0b",
+  TARGETED:      "#22c55e",
+  PROPOSAL:      "#a78bfa",
+  INTERESTED:    "#34d399",
+  THINKING:      "#60a5fa",
+  CLOSE:         "#fb7185",
+  WON:           "#22c55e",
+  NOT_INTERESTED: "#f87171",
+  DUPLICATE:     "#ef4444",
+  UNREACHABLE:   "#dc2626",
+  NOT_TARGET:    "#f97316",
+  TOO_EXPENSIVE: "#fb923c",
 };
 
 const DEAL_COLORS: Record<string, string> = {
@@ -76,16 +90,31 @@ const DEAL_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  NEW: "Новий",
-  CONTACTED: "Контакт",
+  // legacy lead statuses
+  NEW: "Новий лід",
   NEGOTIATION: "Переговори",
-  WON: "Виграно",
-  LOST: "Програно",
-  PLANNING: "Планування",
-  DESIGN: "Дизайн",
+  LOST: "Програш",
+  // current lead statuses
+  NEW_LEAD:       "Новий лід",
+  CONTACTED:      "Звʼязався",
+  MISSED_CALL:    "Недозвон",
+  TARGETED:       "Цільовий",
+  PROPOSAL:       "КП",
+  INTERESTED:     "Цікаво",
+  THINKING:       "Думає",
+  CLOSE:          "Закрити лід",
+  WON:            "Виграш",
+  NOT_INTERESTED: "Не цікаво",
+  DUPLICATE:      "Дубль",
+  UNREACHABLE:    "Не змогли звʼязатись",
+  NOT_TARGET:     "не ЦА",
+  TOO_EXPENSIVE:  "Дорого",
+  // deal statuses
+  PLANNING:    "Планування",
+  DESIGN:      "Дизайн",
   DEVELOPMENT: "Розробка",
-  TESTING: "Тестування",
-  COMPLETED: "Завершено",
+  TESTING:     "Тестування",
+  COMPLETED:   "Завершено",
 };
 
 export function LeadDonutChart({ data }: { data: LeadStatus[] }) {

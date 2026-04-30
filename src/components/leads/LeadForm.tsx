@@ -33,11 +33,20 @@ export interface LeadFormData {
 }
 
 const STATUSES = [
-  { value: "NEW", label: "Новий" },
-  { value: "CONTACTED", label: "Контакт" },
-  { value: "NEGOTIATION", label: "Переговори" },
-  { value: "WON", label: "Виграно" },
-  { value: "LOST", label: "Програно" },
+  { value: "NEW_LEAD",       label: "Новий лід" },
+  { value: "CONTACTED",      label: "Звʼязався" },
+  { value: "MISSED_CALL",    label: "Недозвон" },
+  { value: "TARGETED",       label: "Цільовий" },
+  { value: "PROPOSAL",       label: "КП" },
+  { value: "INTERESTED",     label: "Цікаво" },
+  { value: "THINKING",       label: "Думає" },
+  { value: "CLOSE",          label: "Закрити лід" },
+  { value: "WON",            label: "Виграш — Продаж" },
+  { value: "NOT_INTERESTED", label: "Програш — Не цікаво" },
+  { value: "DUPLICATE",      label: "Програш — Дубль" },
+  { value: "UNREACHABLE",    label: "Програш — Не змогли звʼязатись" },
+  { value: "NOT_TARGET",     label: "Програш — не ЦА" },
+  { value: "TOO_EXPENSIVE",  label: "Програш — Дорого" },
 ];
 
 const SOURCES = ["Instagram", "Telegram", "Реклама", "Сайт", "Реферал", "Інше"];
