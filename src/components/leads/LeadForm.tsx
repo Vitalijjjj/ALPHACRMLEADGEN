@@ -16,6 +16,7 @@ export interface LeadFormData {
   email: string;
   comment: string;
   source: string;
+  sourceDetail: string;
   geo: string;
   niche: string;
   amount: string;
@@ -49,7 +50,16 @@ const STATUSES = [
   { value: "TOO_EXPENSIVE",  label: "Програш — Дорого" },
 ];
 
-const SOURCES = ["Instagram", "Telegram", "Реклама", "Сайт", "Реферал", "Інше"];
+const SOURCES: { value: string; detail?: string }[] = [
+  { value: "IG органіка Артур" },
+  { value: "IG органіка Вітал" },
+  { value: "IG Розсилки",      detail: "Нікнейм акаунту" },
+  { value: "Таргет",           detail: "Назва кампанії" },
+  { value: "Контекст" },
+  { value: "Сайт" },
+  { value: "Сарафанне радіо",  detail: "Від якого клієнта" },
+  { value: "Партнерка",        detail: "Хто партнер" },
+];
 
 const SERVICES = [
   "АІ лендос",
@@ -80,6 +90,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     email: initial?.email ?? "",
     comment: initial?.comment ?? "",
     source: initial?.source ?? "",
+    sourceDetail: initial?.sourceDetail ?? "",
     geo: initial?.geo ?? "",
     niche: initial?.niche ?? "",
     amount: initial?.amount ?? "",
@@ -171,10 +182,22 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={lbl}>Джерело</label>
-              <select value={data.source} onChange={set("source")} className={`${f} cursor-pointer`}>
+              <select
+                value={data.source}
+                onChange={(e) => setData((d) => ({ ...d, source: e.target.value, sourceDetail: "" }))}
+                className={`${f} cursor-pointer`}
+              >
                 <option value="">—</option>
-                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
               </select>
+              {SOURCES.find((s) => s.value === data.source)?.detail && (
+                <input
+                  value={data.sourceDetail}
+                  onChange={set("sourceDetail")}
+                  className={`${f} mt-1.5`}
+                  placeholder={SOURCES.find((s) => s.value === data.source)?.detail}
+                />
+              )}
             </div>
             <div>
               <label className={lbl}>Статус</label>

@@ -52,7 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body.phone       !== undefined) data.phone       = body.phone || null;
     if (body.email       !== undefined) data.email       = body.email || null;
     if (body.comment     !== undefined) data.comment     = body.comment || null;
-    if (body.source      !== undefined) data.source      = body.source || null;
+    if (body.source       !== undefined) data.source       = body.source || null;
+    if (body.sourceDetail !== undefined) data.sourceDetail = body.sourceDetail || null;
     if (body.geo         !== undefined) data.geo         = body.geo || null;
     if (body.niche       !== undefined) data.niche       = body.niche || null;
     if (body.amount      !== undefined) data.amount      = body.amount ? parseFloat(body.amount) : null;

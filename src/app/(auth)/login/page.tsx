@@ -59,7 +59,7 @@ export default function LoginPage() {
             C
           </div>
           <h1 className="text-2xl font-bold text-[var(--text)]">Ласкаво просимо</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1.5">Увійдіть у свій CRM акаунт</p>
+          <p className="text-sm text-[var(--text-muted)] mt-1.5">Увійдіть у свій AlphaCRM акаунт</p>
         </div>
 
         <form

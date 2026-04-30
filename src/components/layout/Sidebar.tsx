@@ -49,7 +49,7 @@ function NavContent({ onLinkClick }: { onLinkClick?: () => void }) {
         </div>
         <div>
           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            SHSTKV
+            Alpha
           </span>
           <span style={{ fontSize: 9, display: "block", fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--text-dim)", lineHeight: 1.2 }}>
             CRM

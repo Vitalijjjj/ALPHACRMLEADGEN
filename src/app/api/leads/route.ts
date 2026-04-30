@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    name, instagram, telegram, phone, email, comment, source, geo, niche, amount, tags, status,
+    name, instagram, telegram, phone, email, comment, source, sourceDetail, geo, niche, amount, tags, status,
     siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt, pushComment, createdAt,
   } = body;
 
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
       email: email || null,
       comment: comment || null,
       source: source || null,
+      sourceDetail: sourceDetail || null,
       geo: geo || null,
       niche: niche || null,
       amount: amount ? parseFloat(amount) : null,

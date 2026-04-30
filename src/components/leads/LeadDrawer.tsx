@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, Video, Globe, Layers, CreditCard, TrendingUp } from "lucide-react";
-import { ALL_UPSELL_SERVICES } from "@/components/leads/LeadForm";
+import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, Video, Globe, Layers, CreditCard, TrendingUp, Pencil } from "lucide-react";
+import { ALL_UPSELL_SERVICES, LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TaskForm } from "@/components/tasks/TaskForm";
@@ -40,6 +40,7 @@ interface LeadDetail {
   email: string | null;
   comment: string | null;
   source: string | null;
+  sourceDetail: string | null;
   geo: string | null;
   niche: string | null;
   amount: number | null;
@@ -102,6 +103,7 @@ export default function LeadDrawer({
   const [showTask, setShowTask] = useState(false);
   const [saving, setSaving] = useState(false);
   const [phoneCopied, setPhoneCopied] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const fetchLead = useCallback(async () => {
     try {
@@ -171,6 +173,17 @@ export default function LeadDrawer({
     fetchLead();
   }
 
+  async function saveEdit(data: LeadFormData) {
+    await fetch(`/api/leads/${leadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    setShowEdit(false);
+    fetchLead();
+    onUpdate();
+  }
+
   async function createTask(data: Record<string, unknown>) {
     await fetch("/api/tasks", {
       method: "POST",
@@ -206,8 +219,20 @@ export default function LeadDrawer({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowEdit(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80 cursor-pointer"
+                style={{
+                  background: "rgba(201,140,10,0.12)",
+                  border: "1px solid rgba(201,140,10,0.3)",
+                  color: "var(--accent)",
+                }}
+              >
+                <Pencil size={13} />
+                Редагувати
+              </button>
               <a
-                href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Зустріч з ${lead.name}`)}&details=${encodeURIComponent(`CRM Lead: ${lead.name}`)}`}
+                href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Зустріч з ${lead.name}`)}&details=${encodeURIComponent(`AlphaCRM Lead: ${lead.name}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Створити Google Meet"
@@ -282,7 +307,7 @@ export default function LeadDrawer({
               <div className="flex flex-wrap gap-3 pt-1">
                 {lead.source && (
                   <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                    <Tag size={11} />{lead.source}
+                    <Tag size={11} />{lead.source}{lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}
                   </span>
                 )}
                 {lead.geo && (
@@ -565,6 +590,38 @@ export default function LeadDrawer({
 
       <Modal open={showTask} onClose={() => setShowTask(false)} title="Нова задача" size="sm">
         <TaskForm onSave={createTask} onCancel={() => setShowTask(false)} />
+      </Modal>
+
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Редагувати лід" size="xl">
+        <LeadForm
+          onSave={saveEdit}
+          onCancel={() => setShowEdit(false)}
+          initial={{
+            name: lead.name,
+            instagram: lead.instagram ?? "",
+            telegram: lead.telegram ?? "",
+            phone: lead.phone ?? "",
+            email: lead.email ?? "",
+            comment: lead.comment ?? "",
+            source: lead.source ?? "",
+            sourceDetail: lead.sourceDetail ?? "",
+            geo: lead.geo ?? "",
+            niche: lead.niche ?? "",
+            amount: lead.amount ? String(lead.amount) : "",
+            status: lead.status,
+            siteStructure: lead.siteStructure ?? "",
+            hasExtraLang: lead.hasExtraLang,
+            languages: lead.languages ?? "",
+            service: lead.service ?? "",
+            paymentSystem: lead.paymentSystem ?? "",
+            paymentSystemCustom: "",
+            usedServices: lead.usedServices,
+            projectDeadline: lead.projectDeadline ?? "",
+            pushAt: lead.pushAt ? lead.pushAt.slice(0, 16) : "",
+            pushComment: lead.pushComment ?? "",
+            createdAt: lead.createdAt.slice(0, 10),
+          }}
+        />
       </Modal>
     </>
   );

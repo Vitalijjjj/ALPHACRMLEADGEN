@@ -17,6 +17,7 @@ model Lead {
   email       String?
   comment     String?
   source      String?
+  sourceDetail String?
   geo         String?
   niche       String?
   amount      Float?
