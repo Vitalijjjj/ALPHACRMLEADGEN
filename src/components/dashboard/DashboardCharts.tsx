@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   PieChart,
   Pie,
@@ -12,14 +13,20 @@ import {
   YAxis,
   Area,
   AreaChart,
+  LineChart,
+  Line,
+  CartesianGrid,
+  Legend,
 } from "recharts";
 
 export const CARD = {
-  background: "linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.012) 40%, rgba(255,255,255,0) 100%), rgba(10,10,10,0.82)",
+  background:
+    "linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.012) 40%, rgba(255,255,255,0) 100%), rgba(10,10,10,0.82)",
   backdropFilter: "blur(48px) saturate(180%) brightness(1.06)",
   WebkitBackdropFilter: "blur(48px) saturate(180%) brightness(1.06)",
   border: "1px solid rgba(255,255,255,0.09)",
-  boxShadow: "0 8px 60px -12px rgba(0,0,0,0.80), 0 4px 24px -4px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.55)",
+  boxShadow:
+    "0 8px 60px -12px rgba(0,0,0,0.80), 0 4px 24px -4px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.55)",
   borderRadius: 18,
   position: "relative" as const,
   overflow: "hidden" as const,
@@ -34,6 +41,14 @@ const TOOLTIP_STYLE = {
   boxShadow: "0 4px 20px rgba(0,0,0,0.7)",
 };
 
+export interface DailyLeadPoint {
+  day: string;
+  total: number;
+  targeted: number;
+  lost: number;
+  won: number;
+}
+
 interface LeadStatus {
   status: string;
   _count: { status: number };
@@ -45,19 +60,19 @@ interface DealStatus {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  NEW:         "#C98C0A",
-  CONTACTED:   "#22d3ee",
+  NEW: "#C98C0A",
+  CONTACTED: "#22d3ee",
   NEGOTIATION: "#a78bfa",
-  WON:         "#C98C0A",
-  LOST:        "#f87171",
+  WON: "#C98C0A",
+  LOST: "#f87171",
 };
 
 const DEAL_COLORS: Record<string, string> = {
-  PLANNING:    "#C98C0A",
-  DESIGN:      "#22d3ee",
+  PLANNING: "#C98C0A",
+  DESIGN: "#22d3ee",
   DEVELOPMENT: "#a78bfa",
-  TESTING:     "#fbbf24",
-  COMPLETED:   "#00cc33",
+  TESTING: "#fbbf24",
+  COMPLETED: "#00cc33",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -246,5 +261,110 @@ export function MiniLineChart({ points }: { points: number[] }) {
         />
       </AreaChart>
     </ResponsiveContainer>
+  );
+}
+
+export function LeadDynamicsSection({
+  currentData,
+  prevData,
+  currentLabel,
+  prevLabel,
+}: {
+  currentData: DailyLeadPoint[];
+  prevData: DailyLeadPoint[];
+  currentLabel: string;
+  prevLabel: string;
+}) {
+  const [tab, setTab] = useState<"current" | "prev">("current");
+  const data = tab === "current" ? currentData : prevData;
+
+  return (
+    <div style={CARD} className="p-5">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <p className="text-sm font-semibold text-[var(--text)]">Динаміка лідів</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            {tab === "current" ? currentLabel : prevLabel}
+          </p>
+        </div>
+        <div
+          className="flex rounded-xl overflow-hidden"
+          style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          {(["current", "prev"] as const).map((t, i) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`text-xs px-3 py-1.5 transition-colors cursor-pointer${i > 0 ? " border-l border-[rgba(255,255,255,0.08)]" : ""}`}
+              style={{
+                background: tab === t ? "var(--accent)" : "transparent",
+                color: tab === t ? "#000" : "var(--text-muted)",
+                fontWeight: tab === t ? 600 : 400,
+              }}
+            >
+              {t === "current" ? "Поточний" : "Попередній"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="flex items-center justify-center h-52 text-[var(--text-muted)] text-sm">
+          Немає даних за цей місяць
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={248}>
+          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+            <XAxis
+              dataKey="day"
+              tick={{ fontSize: 9, fill: "#555" }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              allowDecimals={false}
+              tick={{ fontSize: 9, fill: "#555" }}
+              axisLine={false}
+              tickLine={false}
+              width={20}
+            />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              cursor={{ stroke: "rgba(255,255,255,0.06)", strokeWidth: 1 }}
+            />
+            <Legend
+              iconType="circle"
+              iconSize={7}
+              wrapperStyle={{ fontSize: 11, paddingTop: 14 }}
+              formatter={(val: string) => (
+                <span style={{ color: "#888" }}>{val}</span>
+              )}
+            />
+            <Line
+              type="monotone" dataKey="total" name="Загальна"
+              stroke="#C98C0A" strokeWidth={2} dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
+            />
+            <Line
+              type="monotone" dataKey="targeted" name="Цільовий"
+              stroke="#22c55e" strokeWidth={2} dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
+            />
+            <Line
+              type="monotone" dataKey="lost" name="Не ЦА"
+              stroke="#f87171" strokeWidth={2} dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
+            />
+            <Line
+              type="monotone" dataKey="won" name="Виграно"
+              stroke="#22d3ee" strokeWidth={2} dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
   );
 }
