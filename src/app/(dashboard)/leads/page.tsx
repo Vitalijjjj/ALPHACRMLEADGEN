@@ -119,11 +119,16 @@ export default function LeadsPage() {
 
   async function updateLead(data: LeadFormData) {
     if (!editLead) return;
-    await fetch(`/api/leads/${editLead.id}`, {
+    const res = await fetch(`/api/leads/${editLead.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert("Помилка збереження: " + (err.detail || err.error || res.status));
+      return;
+    }
     setEditLead(null);
     fetchLeads();
   }

@@ -26,41 +26,65 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 }
 
+function parseWarsawDate(raw: string): Date {
+  // datetime-local gives "YYYY-MM-DDTHH:mm" (16 chars) — treat as Europe/Warsaw UTC+2
+  return new Date(raw.length === 16 ? raw + ":00+02:00" : raw);
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await req.json();
 
-  const existing = await db.lead.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const body = await req.json();
 
-  const updateData = { ...body };
-  delete updateData.paymentSystemCustom; // not a DB field
-  if (updateData.instagram) updateData.instagram = updateData.instagram.replace(/^@/, "").trim();
-  if (updateData.telegram) updateData.telegram = updateData.telegram.replace(/^@/, "").trim();
-  if (updateData.amount !== undefined) updateData.amount = updateData.amount ? parseFloat(updateData.amount) : null;
-  if (updateData.pushAt !== undefined) {
-    const raw = updateData.pushAt;
-    updateData.pushAt = raw ? new Date(raw.length === 16 ? raw + ":00+02:00" : raw) : null;
+    const existing = await db.lead.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Build a clean update object with only known schema fields
+    const data: Record<string, unknown> = {};
+
+    if (body.name        !== undefined) data.name        = body.name;
+    if (body.instagram   !== undefined) data.instagram   = body.instagram ? body.instagram.replace(/^@/, "").trim() : null;
+    if (body.telegram    !== undefined) data.telegram    = body.telegram ? body.telegram.replace(/^@/, "").trim() : null;
+    if (body.phone       !== undefined) data.phone       = body.phone || null;
+    if (body.email       !== undefined) data.email       = body.email || null;
+    if (body.comment     !== undefined) data.comment     = body.comment || null;
+    if (body.source      !== undefined) data.source      = body.source || null;
+    if (body.geo         !== undefined) data.geo         = body.geo || null;
+    if (body.niche       !== undefined) data.niche       = body.niche || null;
+    if (body.amount      !== undefined) data.amount      = body.amount ? parseFloat(body.amount) : null;
+    if (body.status      !== undefined) data.status      = body.status;
+    if (body.siteStructure    !== undefined) data.siteStructure    = body.siteStructure || null;
+    if (body.hasExtraLang     !== undefined) data.hasExtraLang     = !!body.hasExtraLang;
+    if (body.languages        !== undefined) data.languages        = body.hasExtraLang ? (body.languages || null) : null;
+    if (body.service          !== undefined) data.service          = body.service || null;
+    if (body.paymentSystem    !== undefined) data.paymentSystem    = body.paymentSystem || null;
+    if (body.usedServices     !== undefined) data.usedServices     = Array.isArray(body.usedServices) ? body.usedServices : [];
+    if (body.projectDeadline  !== undefined) data.projectDeadline  = body.projectDeadline || null;
+    if (body.pushAt           !== undefined) data.pushAt           = body.pushAt ? parseWarsawDate(body.pushAt) : null;
+    if (body.pushComment      !== undefined) data.pushComment      = body.pushComment || null;
+    if (body.remindAt         !== undefined) data.remindAt         = body.remindAt ? new Date(body.remindAt) : null;
+
+    const lead = await db.lead.update({ where: { id }, data });
+
+    if (body.status && body.status !== existing.status) {
+      await db.activity.create({
+        data: {
+          leadId: id,
+          type: "STATUS_CHANGE",
+          content: `Статус змінено: ${existing.status} → ${body.status}`,
+        },
+      });
+    }
+
+    return NextResponse.json(lead);
+  } catch (e) {
+    console.error("PATCH /api/leads/[id]:", e);
+    return NextResponse.json({ error: "DB error", detail: String(e) }, { status: 500 });
   }
-  if (updateData.hasExtraLang === false) updateData.languages = null;
-  if (updateData.usedServices !== undefined && !Array.isArray(updateData.usedServices)) updateData.usedServices = [];
-
-  const lead = await db.lead.update({ where: { id }, data: updateData });
-
-  if (body.status && body.status !== existing.status) {
-    await db.activity.create({
-      data: {
-        leadId: id,
-        type: "STATUS_CHANGE",
-        content: `Статус змінено: ${existing.status} → ${body.status}`,
-      },
-    });
-  }
-
-  return NextResponse.json(lead);
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
