@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -33,20 +34,8 @@ function NavContent({ onLinkClick }: { onLinkClick?: () => void }) {
   return (
     <>
       {/* Logo */}
-      <div style={{ padding: "24px 20px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 28, flexShrink: 0 }}>
-          {[10, 18, 14, 22, 16, 20, 12].map((h, i) => (
-            <div
-              key={i}
-              style={{
-                width: 3, height: h,
-                borderRadius: 999,
-                background: "var(--accent)",
-                boxShadow: "0 0 6px var(--accent-glow)",
-              }}
-            />
-          ))}
-        </div>
+      <div style={{ padding: "24px 20px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+        <Image src="/logo.svg" alt="AlphaCRM" width={36} height={36} style={{ flexShrink: 0 }} />
         <div>
           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
             Alpha
