@@ -194,12 +194,11 @@ export default async function DashboardPage() {
   const kpiCards = [
     {
       label: "Всього лідів",
-      sub: stats.currentMonthLabel,
-      value: stats.monthlyLeads,
-      trend:
-        stats.monthlyGrowth !== 0
-          ? `${stats.monthlyGrowth > 0 ? "+" : ""}${stats.monthlyGrowth}% vs попередній`
-          : "Базовий місяць",
+      sub: "Попередній місяць",
+      value: stats.lastMonthLeads,
+      trend: stats.monthlyGrowth !== 0
+        ? `Поточний: ${stats.monthlyLeads} (${stats.monthlyGrowth > 0 ? "+" : ""}${stats.monthlyGrowth}%)`
+        : `Поточний: ${stats.monthlyLeads}`,
       trendUp: stats.monthlyGrowth >= 0,
       Icon: Users,
       color: "#C98C0A",
@@ -208,12 +207,11 @@ export default async function DashboardPage() {
     },
     {
       label: "Цільові ліди",
-      sub: stats.currentMonthLabel,
-      value: stats.targetedCurrentMonth,
-      trend:
-        stats.monthlyLeads > 0
-          ? `${Math.round((stats.targetedCurrentMonth / stats.monthlyLeads) * 100)}% від місяця`
-          : "—",
+      sub: "Попередній місяць",
+      value: stats.targetedPrevMonth,
+      trend: stats.lastMonthLeads > 0
+        ? `${Math.round((stats.targetedPrevMonth / stats.lastMonthLeads) * 100)}% від місяця`
+        : "—",
       trendUp: true,
       Icon: Target,
       color: "#22c55e",
@@ -221,24 +219,23 @@ export default async function DashboardPage() {
       href: "/leads",
     },
     {
-      label: "Ліди",
-      sub: stats.prevMonthLabel,
-      value: stats.lastMonthLeads,
-      trend: `Цільових: ${stats.targetedPrevMonth}`,
-      trendUp: stats.monthlyLeads >= stats.lastMonthLeads,
+      label: "Всього лідів",
+      sub: "Поточний місяць",
+      value: stats.monthlyLeads,
+      trend: `${stats.currentMonthLabel}`,
+      trendUp: true,
       Icon: CalendarDays,
       color: "#22d3ee",
       glow: "rgba(34,211,238,0.28)",
       href: "/leads",
     },
     {
-      label: "Цільові",
-      sub: stats.prevMonthLabel,
-      value: stats.targetedPrevMonth,
-      trend:
-        stats.lastMonthLeads > 0
-          ? `${Math.round((stats.targetedPrevMonth / stats.lastMonthLeads) * 100)}% від місяця`
-          : "—",
+      label: "Цільові ліди",
+      sub: "Поточний місяць",
+      value: stats.targetedCurrentMonth,
+      trend: stats.monthlyLeads > 0
+        ? `${Math.round((stats.targetedCurrentMonth / stats.monthlyLeads) * 100)}% від місяця`
+        : "—",
       trendUp: true,
       Icon: Target,
       color: "#a78bfa",
