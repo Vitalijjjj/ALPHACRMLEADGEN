@@ -51,8 +51,8 @@ function buildDailyData(
     const d = new Date(lead.createdAt).getDate() - 1;
     if (d < 0 || d >= maxDay) continue;
     days[d].total++;
-    if (["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"].includes(lead.status)) days[d].targeted++;
-    if (["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"].includes(lead.status)) days[d].lost++;
+    if (["CONTACTED", "NEGOTIATION", "WON"].includes(lead.status)) days[d].targeted++;
+    if (lead.status === "LOST") days[d].lost++;
     if (lead.status === "WON") days[d].won++;
   }
 
@@ -119,7 +119,7 @@ async function getStats() {
     }),
     db.lead.aggregate({ _sum: { amount: true } }),
     db.lead.count({ where: { status: "WON" } }),
-    db.lead.count({ where: { status: { in: ["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"] } } }),
+    db.lead.count({ where: { status: "LOST" } }),
     db.lead.count({ where: { createdAt: { gte: startOfMonth } } }),
     db.lead.count({ where: { createdAt: { gte: startOfLastMonth, lt: startOfMonth } } }),
     db.lead.aggregate({ _sum: { amount: true }, where: { status: "WON" } }),
@@ -143,13 +143,13 @@ async function getStats() {
     db.lead.count({
       where: {
         createdAt: { gte: startOfMonth },
-        status: { in: ["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"] },
+        status: { in: ["CONTACTED", "NEGOTIATION", "WON"] },
       },
     }),
     db.lead.count({
       where: {
         createdAt: { gte: startOfLastMonth, lt: startOfMonth },
-        status: { in: ["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"] },
+        status: { in: ["CONTACTED", "NEGOTIATION", "WON"] },
       },
     }),
   ]);
