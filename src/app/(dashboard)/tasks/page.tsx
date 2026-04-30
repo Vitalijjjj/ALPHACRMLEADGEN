@@ -5,6 +5,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-p
 import { Plus, AlertTriangle, Clock } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { TaskForm } from "@/components/tasks/TaskForm";
+import LeadDrawer from "@/components/leads/LeadDrawer";
 import { format, isPast } from "date-fns";
 import { uk } from "date-fns/locale";
 
@@ -65,6 +66,7 @@ export default function TasksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>("Всі");
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     const res = await fetch("/api/tasks");
@@ -329,13 +331,16 @@ export default function TasksPage() {
                                   <div className="flex items-center justify-between mt-2">
                                     <div className="text-xs text-[var(--text-muted)] truncate flex-1">
                                       {task.lead && (
-                                        <span className="flex items-center gap-1">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setOpenLeadId(task.lead!.id); }}
+                                          className="flex items-center gap-1 hover:text-[var(--accent)] transition-colors cursor-pointer max-w-full truncate"
+                                        >
                                           <span
                                             className="w-1.5 h-1.5 rounded-full shrink-0"
                                             style={{ background: "var(--accent)" }}
                                           />
                                           {task.lead.name}
-                                        </span>
+                                        </button>
                                       )}
                                       {task.deal && (
                                         <span className="flex items-center gap-1">
@@ -376,6 +381,10 @@ export default function TasksPage() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Нова задача" size="sm">
         <TaskForm onSave={createTask} onCancel={() => setShowCreate(false)} />
       </Modal>
+
+      {openLeadId && (
+        <LeadDrawer leadId={openLeadId} onClose={() => setOpenLeadId(null)} onUpdate={fetchTasks} />
+      )}
     </div>
   );
 }
