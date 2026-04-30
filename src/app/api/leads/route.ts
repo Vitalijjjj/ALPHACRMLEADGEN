@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     name, instagram, telegram, phone, email, comment, source, geo, niche, amount, tags, status,
-    siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt, pushComment,
+    siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt, pushComment, createdAt,
   } = body;
 
   if (!name?.trim()) {
@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       projectDeadline: projectDeadline || null,
       pushAt: pushAt ? new Date(pushAt.length === 16 ? pushAt + ":00+02:00" : pushAt) : null,
       pushComment: pushComment || null,
+      ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
     },
   });
 

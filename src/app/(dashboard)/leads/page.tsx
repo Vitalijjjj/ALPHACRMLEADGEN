@@ -103,6 +103,7 @@ export default function LeadsPage() {
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [openLead, setOpenLead] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -263,9 +264,19 @@ export default function LeadsPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-0.5">
                       {lead.phone && (
-                        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                          <Phone size={10} />{lead.phone}
-                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(lead.phone!);
+                            setCopiedPhone(lead.id);
+                            setTimeout(() => setCopiedPhone(null), 1500);
+                          }}
+                          className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                          title="Скопіювати"
+                        >
+                          <Phone size={10} />
+                          {copiedPhone === lead.id ? <span className="text-green-400">✓ Скопійовано</span> : lead.phone}
+                        </button>
                       )}
                       {lead.email && (
                         <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
@@ -364,6 +375,7 @@ export default function LeadsPage() {
               projectDeadline: editLead.projectDeadline ?? "",
               pushAt: editLead.pushAt ? toWarsawInput(editLead.pushAt) : "",
               pushComment: editLead.pushComment ?? "",
+              createdAt: editLead.createdAt?.slice(0, 10) ?? "",
             }}
           />
         )}

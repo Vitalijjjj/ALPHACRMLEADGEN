@@ -30,6 +30,7 @@ export interface LeadFormData {
   projectDeadline: string;
   pushAt: string;
   pushComment: string;
+  createdAt: string;
 }
 
 const STATUSES = [
@@ -93,6 +94,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     projectDeadline: initial?.projectDeadline ?? "",
     pushAt: initial?.pushAt ?? "",
     pushComment: initial?.pushComment ?? "",
+    createdAt: initial?.createdAt ?? new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
 
@@ -182,7 +184,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={lbl}>Гео</label>
               <input value={data.geo} onChange={set("geo")} className={f} placeholder="UA..." />
@@ -191,9 +193,16 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
               <label className={lbl}>Ніша</label>
               <input value={data.niche} onChange={set("niche")} className={f} placeholder="e-comm..." />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={lbl}>Сума (€)</label>
               <input value={data.amount} onChange={set("amount")} type="number" min="0" step="0.01" className={f} placeholder="0" />
+            </div>
+            <div>
+              <label className={lbl}>Дата створення</label>
+              <input value={data.createdAt} onChange={set("createdAt")} type="date" className={f} />
             </div>
           </div>
 

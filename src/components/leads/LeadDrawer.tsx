@@ -87,6 +87,7 @@ export default function LeadDrawer({
   const [savingRemind, setSavingRemind] = useState(false);
   const [showTask, setShowTask] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [phoneCopied, setPhoneCopied] = useState(false);
 
   const fetchLead = useCallback(async () => {
     try {
@@ -245,9 +246,18 @@ export default function LeadDrawer({
                 </a>
               )}
               {lead.phone && (
-                <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                  <Phone size={14} /><span>{lead.phone}</span>
-                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(lead.phone!);
+                    setPhoneCopied(true);
+                    setTimeout(() => setPhoneCopied(false), 1500);
+                  }}
+                  className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                  title="Скопіювати"
+                >
+                  <Phone size={14} />
+                  {phoneCopied ? <span className="text-green-400">✓ Скопійовано</span> : <span>{lead.phone}</span>}
+                </button>
               )}
               {lead.email && (
                 <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
