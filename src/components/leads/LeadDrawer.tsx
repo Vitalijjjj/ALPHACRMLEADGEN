@@ -392,8 +392,17 @@ export default function LeadDrawer({
                     <textarea
                       autoFocus
                       value={structureEdit}
-                      onChange={(e) => setStructureEdit(e.target.value)}
-                      onBlur={async () => {
+                      onChange={(e) => {
+                        setStructureEdit(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = e.target.scrollHeight + "px";
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.height = "auto";
+                        e.target.style.height = e.target.scrollHeight + "px";
+                      }}
+                      onBlur={async (e) => {
+                        e.target.style.height = "auto";
                         await fetch(`/api/leads/${leadId}`, {
                           method: "PATCH",
                           headers: { "Content-Type": "application/json" },
@@ -405,9 +414,8 @@ export default function LeadDrawer({
                       onKeyDown={(e) => {
                         if (e.key === "Escape") { setStructureEdit(null); fetchLead(); }
                       }}
-                      rows={6}
-                      className="w-full text-sm bg-transparent text-[var(--text)] resize-y outline-none focus:outline-none whitespace-pre-wrap"
-                      style={{ border: "none", padding: 0, fontFamily: "inherit" }}
+                      className="w-full text-sm bg-transparent text-[var(--text)] outline-none focus:outline-none overflow-hidden"
+                      style={{ border: "none", padding: 0, fontFamily: "inherit", resize: "none", minHeight: "1.25rem" }}
                     />
                   ) : (
                     <p

@@ -68,7 +68,7 @@ export function TaskForm({ onSave, onCancel }: TaskFormProps) {
       <div className="space-y-1">
         <label className="text-xs text-[var(--text-muted)]">Відповідальний</label>
         <div className="flex gap-2">
-          {["Андрій", "Лідусик"].map((name) => (
+          {["Артур"].map((name) => (
             <button
               key={name}
               type="button"

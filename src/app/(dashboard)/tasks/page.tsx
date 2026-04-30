@@ -57,7 +57,7 @@ const PRIORITY_CFG: Record<string, { label: string; color: string; bg: string }>
   URGENT: { label: "Терміново", color: "#ef4444",  bg: "rgba(239,68,68,0.14)" },
 };
 
-const ASSIGNEES = ["Всі", "Андрій", "Лідусик"] as const;
+const ASSIGNEES = ["Всі", "Артур"] as const;
 type AssigneeFilter = typeof ASSIGNEES[number];
 
 export default function TasksPage() {
@@ -317,8 +317,8 @@ export default function TasksPage() {
                                     <span
                                       className="inline-block text-xs px-1.5 py-0.5 rounded-md font-medium mb-1.5"
                                       style={{
-                                        background: task.assignee === "Андрій" ? "rgba(201,140,10,0.15)" : "rgba(168,85,247,0.15)",
-                                        color: task.assignee === "Андрій" ? "#C98C0A" : "#a855f7",
+                                        background: "rgba(201,140,10,0.15)",
+                                        color: "#C98C0A",
                                       }}
                                     >
                                       {task.assignee}
