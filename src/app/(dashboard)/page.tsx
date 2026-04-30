@@ -59,6 +59,16 @@ function buildDailyData(
   return days;
 }
 
+const STATS_EMPTY = {
+  totalLeads: 0, totalDeals: 0, totalTasks: 0, taskDone: 0, recentLeads: [] as never[],
+  overdueTasks: 0, leadsByStatus: [] as never[], dealsByStatus: [] as never[],
+  conversion: 0, leadsBySource: [] as never[], totalAmount: 0, wonLeads: 0, lostLeads: 0,
+  monthlyLeads: 0, monthlyGrowth: 0, wonAmount: 0, activePipeline: 0, avgLeadValue: 0,
+  todayLeadsBySource: [] as never[], currentMonthData: [] as never[], prevMonthData: [] as never[],
+  targetedCurrentMonth: 0, targetedPrevMonth: 0, lastMonthLeads: 0,
+  currentMonthLabel: "", prevMonthLabel: "",
+};
+
 async function getStats() {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -177,6 +187,15 @@ async function getStats() {
   };
 }
 
+async function getStatsSafe() {
+  try {
+    return await getStats();
+  } catch (e) {
+    console.error("Dashboard getStats error:", e);
+    return STATS_EMPTY;
+  }
+}
+
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   NEW:         { label: "Новий лід",   cls: "text-amber-400 bg-amber-400/10 border border-amber-400/20" },
   NEW_LEAD:    { label: "Новий лід",   cls: "text-amber-400 bg-amber-400/10 border border-amber-400/20" },
@@ -198,7 +217,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 export default async function DashboardPage() {
-  const stats = await getStats();
+  const stats = await getStatsSafe();
   const taskTotal = stats.taskDone + stats.totalTasks;
   const todayTotal = stats.todayLeadsBySource.reduce((s, l) => s + l._count.source, 0);
 
