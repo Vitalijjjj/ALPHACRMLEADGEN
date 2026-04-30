@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Phone, Mail, ExternalLink, Pencil, Trash2, ChevronRight } from "lucide-react";
+import { Plus, Search, Phone, Mail, ExternalLink, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
@@ -105,6 +105,9 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt">("createdAt");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -154,12 +157,17 @@ export default function LeadsPage() {
   }
 
   async function deleteLead(id: string) {
-    if (!confirm("Видалити ліда?")) return;
+    setConfirmDeleteId(null);
     await fetch(`/api/leads/${id}`, { method: "DELETE" });
     fetchLeads();
   }
 
   const totalAmount = leads.reduce((s, l) => s + (l.amount ?? 0), 0);
+
+  const sortedLeads = [...leads].sort((a, b) => {
+    const diff = new Date(a[sortBy]).getTime() - new Date(b[sortBy]).getTime();
+    return sortDir === "desc" ? -diff : diff;
+  });
 
   return (
     <div className="p-6 space-y-4">
@@ -209,6 +217,31 @@ export default function LeadsPage() {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
+
+        {/* Sort switch */}
+        <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
+          <button
+            onClick={() => setSortBy("createdAt")}
+            className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "createdAt" ? "text-black font-medium" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            style={sortBy === "createdAt" ? { background: "var(--accent)" } : {}}
+          >
+            Додано
+          </button>
+          <button
+            onClick={() => setSortBy("updatedAt")}
+            className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "updatedAt" ? "text-black font-medium" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            style={sortBy === "updatedAt" ? { background: "var(--accent)" } : {}}
+          >
+            Оновлено
+          </button>
+          <button
+            onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
+            className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+            title={sortDir === "desc" ? "Нові першими" : "Старі першими"}
+          >
+            {sortDir === "desc" ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -233,14 +266,14 @@ export default function LeadsPage() {
                   Завантаження...
                 </td>
               </tr>
-            ) : leads.length === 0 ? (
+            ) : sortedLeads.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">
                   Лідів немає
                 </td>
               </tr>
             ) : (
-              leads.map((lead) => (
+              sortedLeads.map((lead) => (
                 <tr
                   key={lead.id}
                   className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
@@ -333,8 +366,8 @@ export default function LeadsPage() {
                         <Pencil size={13} />
                       </button>
                       <button
-                        onClick={() => deleteLead(lead.id)}
-                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--border)] transition-colors cursor-pointer"
+                        onClick={() => setConfirmDeleteId(lead.id)}
+                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--border)] transition-colors cursor-pointer"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -389,6 +422,27 @@ export default function LeadsPage() {
       {openLead && (
         <LeadDrawer leadId={openLead} onClose={() => setOpenLead(null)} onUpdate={fetchLeads} />
       )}
+
+      {/* Delete confirmation */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="Видалити ліда?">
+        <p className="text-sm text-[var(--text-muted)] mb-5">
+          Цю дію не можна скасувати. Лід та всі пов'язані задачі й активності будуть видалені.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setConfirmDeleteId(null)}
+            className="px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+          >
+            Скасувати
+          </button>
+          <button
+            onClick={() => confirmDeleteId && deleteLead(confirmDeleteId)}
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors cursor-pointer"
+          >
+            Так, видалити
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

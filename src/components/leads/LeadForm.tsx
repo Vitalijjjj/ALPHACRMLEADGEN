@@ -241,7 +241,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
 
           <div>
             <label className={lbl}>Структура сайту</label>
-            <textarea value={data.siteStructure} onChange={set("siteStructure")} rows={isShop ? 2 : 3} className={`${f} resize-none`} placeholder="Сторінки, розділи..." />
+            <textarea value={data.siteStructure} onChange={set("siteStructure")} rows={isShop ? 4 : 6} className={`${f} resize-y min-h-[80px]`} placeholder="Сторінки, розділи..." />
           </div>
 
           <div>

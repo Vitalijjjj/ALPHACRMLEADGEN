@@ -62,7 +62,21 @@ interface LeadDetail {
   deals: Deal[];
 }
 
-const STATUSES = ["NEW", "CONTACTED", "NEGOTIATION", "WON", "LOST"];
+const STATUSES = [
+  { value: "NEW_LEAD",       label: "Новий лід",    accent: "#C98C0A" },
+  { value: "CONTACTED",      label: "Звʼязався",    accent: "#22d3ee" },
+  { value: "MISSED_CALL",    label: "Недозвон",     accent: "#f59e0b" },
+  { value: "TARGETED",       label: "Цільовий",     accent: "#22c55e" },
+  { value: "PROPOSAL",       label: "КП",           accent: "#a78bfa" },
+  { value: "INTERESTED",     label: "Цікаво",       accent: "#34d399" },
+  { value: "THINKING",       label: "Думає",        accent: "#60a5fa" },
+  { value: "WON",            label: "Виграш",       accent: "#22c55e" },
+  { value: "NOT_INTERESTED", label: "Не цікаво",    accent: "#f87171" },
+  { value: "DUPLICATE",      label: "Дубль",        accent: "#f87171" },
+  { value: "UNREACHABLE",    label: "Не дозвонились", accent: "#f87171" },
+  { value: "NOT_TARGET",     label: "не ЦА",        accent: "#f87171" },
+  { value: "TOO_EXPENSIVE",  label: "Дорого",       accent: "#f87171" },
+];
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   NOTE: <MessageSquare size={12} />,
   STATUS_CHANGE: <AlertCircle size={12} />,
@@ -387,19 +401,22 @@ export default function LeadDrawer({
             <div>
               <p className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wide">Статус</p>
               <div className="flex flex-wrap gap-1.5">
-                {STATUSES.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => changeStatus(s)}
-                    className={`px-3 py-1 rounded-lg text-xs transition-colors cursor-pointer ${
-                      lead.status === s
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)]"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
+                {STATUSES.map((s) => {
+                  const active = lead.status === s.value;
+                  return (
+                    <button
+                      key={s.value}
+                      onClick={() => changeStatus(s.value)}
+                      className="px-3 py-1 rounded-lg text-xs transition-all cursor-pointer border"
+                      style={active
+                        ? { background: `${s.accent}22`, color: s.accent, borderColor: `${s.accent}55` }
+                        : { background: "var(--surface-2)", color: "var(--text-muted)", borderColor: "var(--border)" }
+                      }
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
