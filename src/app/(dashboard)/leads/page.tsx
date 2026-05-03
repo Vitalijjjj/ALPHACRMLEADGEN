@@ -170,7 +170,7 @@ export default function LeadsPage() {
   });
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -195,8 +195,8 @@ export default function LeadsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
           {searching
             ? <div className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
             : <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -204,48 +204,104 @@ export default function LeadsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук по імені, @нікнейму, гео..."
+            placeholder="Пошук..."
             className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="flex-1 sm:flex-none px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
 
-        {/* Sort switch */}
-        <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
-          <button
-            onClick={() => setSortBy("createdAt")}
-            className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "createdAt" ? "text-black font-medium" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
-            style={sortBy === "createdAt" ? { background: "var(--accent)" } : {}}
-          >
-            Додано
-          </button>
-          <button
-            onClick={() => setSortBy("updatedAt")}
-            className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "updatedAt" ? "text-black font-medium" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
-            style={sortBy === "updatedAt" ? { background: "var(--accent)" } : {}}
-          >
-            Оновлено
-          </button>
-          <button
-            onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-            title={sortDir === "desc" ? "Нові першими" : "Старі першими"}
-          >
-            {sortDir === "desc" ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
-          </button>
+          {/* Sort switch */}
+          <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5 shrink-0">
+            <button
+              onClick={() => setSortBy("createdAt")}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "createdAt" ? "text-black font-medium" : "text-[var(--text-muted)]"}`}
+              style={sortBy === "createdAt" ? { background: "var(--accent)" } : {}}
+            >
+              Додано
+            </button>
+            <button
+              onClick={() => setSortBy("updatedAt")}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "updatedAt" ? "text-black font-medium" : "text-[var(--text-muted)]"}`}
+              style={sortBy === "updatedAt" ? { background: "var(--accent)" } : {}}
+            >
+              Оновлено
+            </button>
+            <button
+              onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
+              className="p-1 text-[var(--text-muted)] transition-colors cursor-pointer"
+            >
+              {sortDir === "desc" ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+      {/* ── Mobile cards (< sm) ── */}
+      <div className="block sm:hidden space-y-2">
+        {loading ? (
+          <p className="text-center py-10 text-sm text-[var(--text-muted)]">Завантаження...</p>
+        ) : sortedLeads.length === 0 ? (
+          <p className="text-center py-10 text-sm text-[var(--text-muted)]">Лідів немає</p>
+        ) : sortedLeads.map((lead) => (
+          <div
+            key={lead.id}
+            onClick={() => setOpenLead(lead.id)}
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3 cursor-pointer active:opacity-80 transition-opacity"
+          >
+            <div className="flex items-start justify-between gap-2 mb-1.5">
+              <div className="min-w-0">
+                <p className="font-medium text-[var(--text)] truncate">{lead.name}</p>
+                {lead.niche && <p className="text-xs text-[var(--text-muted)] truncate">{lead.niche}</p>}
+              </div>
+              <div className="shrink-0 flex items-center gap-1.5">
+                <Badge value={lead.status} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditLead(lead); }}
+                  className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                >
+                  <Pencil size={13} />
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {lead.instagram && <InstagramLink username={lead.instagram} />}
+              {lead.telegram && <TelegramLink username={lead.telegram} />}
+              {lead.phone && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(lead.phone!);
+                    setCopiedPhone(lead.id);
+                    setTimeout(() => setCopiedPhone(null), 1500);
+                  }}
+                  className="flex items-center gap-1 text-xs text-[var(--text-muted)] cursor-pointer"
+                >
+                  <Phone size={10} />
+                  {copiedPhone === lead.id ? <span className="text-green-400">✓</span> : lead.phone}
+                </button>
+              )}
+              {lead.source && <span className="text-xs text-[var(--text-muted)]">{lead.source}</span>}
+              {lead.amount ? (
+                <span className="text-xs font-semibold ml-auto" style={{ color: "var(--accent)" }}>
+                  €{lead.amount.toLocaleString()}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop table (≥ sm) ── */}
+      <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)]">
@@ -261,122 +317,72 @@ export default function LeadsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">
-                  Завантаження...
-                </td>
-              </tr>
+              <tr><td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">Завантаження...</td></tr>
             ) : sortedLeads.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">
-                  Лідів немає
+              <tr><td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">Лідів немає</td></tr>
+            ) : sortedLeads.map((lead) => (
+              <tr
+                key={lead.id}
+                className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
+                onClick={() => setOpenLead(lead.id)}
+              >
+                <td className="px-4 py-3">
+                  <div className="font-medium text-[var(--text)]">{lead.name}</div>
+                  {lead.niche && <div className="text-xs text-[var(--text-muted)] truncate max-w-[140px]">{lead.niche}</div>}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    {lead.instagram && <InstagramLink username={lead.instagram} />}
+                    {lead.telegram && <TelegramLink username={lead.telegram} />}
+                    {!lead.instagram && !lead.telegram && <span className="text-xs text-[var(--text-dim)]">—</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    {lead.phone && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(lead.phone!);
+                          setCopiedPhone(lead.id);
+                          setTimeout(() => setCopiedPhone(null), 1500);
+                        }}
+                        className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                      >
+                        <Phone size={10} />
+                        {copiedPhone === lead.id ? <span className="text-green-400">✓ Скопійовано</span> : lead.phone}
+                      </button>
+                    )}
+                    {lead.email && <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Mail size={10} />{lead.email}</span>}
+                    {!lead.phone && !lead.email && <span className="text-xs text-[var(--text-dim)]">—</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-3"><Badge value={lead.status} /></td>
+                <td className="px-4 py-3">
+                  <div className="text-xs text-[var(--text-muted)]">{lead.source ?? "—"}</div>
+                  {lead.geo && <div className="text-xs text-[var(--text-dim)]">{lead.geo}</div>}
+                </td>
+                <td className="px-4 py-3">
+                  {lead.amount
+                    ? <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>€{lead.amount.toLocaleString()}</span>
+                    : <span className="text-xs text-[var(--text-dim)]">—</span>}
+                </td>
+                <td className="px-4 py-3 text-xs text-[var(--text-muted)]">
+                  {formatDistanceToNow(new Date(lead.updatedAt), { addSuffix: true, locale: uk })}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setEditLead(lead)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => setConfirmDeleteId(lead.id)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--border)] transition-colors cursor-pointer">
+                      <Trash2 size={13} />
+                    </button>
+                    <ChevronRight size={13} className="text-[var(--text-muted)]" />
+                  </div>
                 </td>
               </tr>
-            ) : (
-              sortedLeads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
-                  onClick={() => setOpenLead(lead.id)}
-                >
-                  {/* Name */}
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-[var(--text)]">{lead.name}</div>
-                    {lead.niche && (
-                      <div className="text-xs text-[var(--text-muted)] truncate max-w-[140px]">{lead.niche}</div>
-                    )}
-                  </td>
-
-                  {/* Social */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      {lead.instagram && <InstagramLink username={lead.instagram} />}
-                      {lead.telegram && <TelegramLink username={lead.telegram} />}
-                      {!lead.instagram && !lead.telegram && (
-                        <span className="text-xs text-[var(--text-dim)]">—</span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Contacts */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      {lead.phone && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(lead.phone!);
-                            setCopiedPhone(lead.id);
-                            setTimeout(() => setCopiedPhone(null), 1500);
-                          }}
-                          className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
-                          title="Скопіювати"
-                        >
-                          <Phone size={10} />
-                          {copiedPhone === lead.id ? <span className="text-green-400">✓ Скопійовано</span> : lead.phone}
-                        </button>
-                      )}
-                      {lead.email && (
-                        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                          <Mail size={10} />{lead.email}
-                        </span>
-                      )}
-                      {!lead.phone && !lead.email && (
-                        <span className="text-xs text-[var(--text-dim)]">—</span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-4 py-3">
-                    <Badge value={lead.status} />
-                  </td>
-
-                  {/* Source / Geo */}
-                  <td className="px-4 py-3">
-                    <div className="text-xs text-[var(--text-muted)]">{lead.source ?? "—"}</div>
-                    {lead.geo && (
-                      <div className="text-xs text-[var(--text-dim)]">{lead.geo}</div>
-                    )}
-                  </td>
-
-                  {/* Amount */}
-                  <td className="px-4 py-3">
-                    {lead.amount ? (
-                      <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                        €{lead.amount.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-[var(--text-dim)]">—</span>
-                    )}
-                  </td>
-
-                  {/* Updated */}
-                  <td className="px-4 py-3 text-xs text-[var(--text-muted)]">
-                    {formatDistanceToNow(new Date(lead.updatedAt), { addSuffix: true, locale: uk })}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setEditLead(lead)}
-                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(lead.id)}
-                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--border)] transition-colors cursor-pointer"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                      <ChevronRight size={13} className="text-[var(--text-muted)]" />
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>

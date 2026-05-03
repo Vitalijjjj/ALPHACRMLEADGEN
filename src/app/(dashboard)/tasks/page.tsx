@@ -129,7 +129,7 @@ export default function TasksPage() {
   ).length;
 
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="p-3 sm:p-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -187,11 +187,11 @@ export default function TasksPage() {
         </div>
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-4 flex-1 overflow-x-auto pb-2">
+          <div className="flex gap-3 sm:gap-4 flex-1 overflow-x-auto pb-2" style={{ touchAction: "pan-x" }}>
             {COLUMNS.map((col) => {
               const colTasks = byStatus(col.id);
               return (
-                <div key={col.id} className="flex flex-col w-72 shrink-0">
+                <div key={col.id} className="flex flex-col shrink-0" style={{ width: "min(288px, 80vw)" }}>
                   {/* Column header */}
                   <div
                     className="flex items-center justify-between mb-3 px-3 py-2.5 rounded-xl"

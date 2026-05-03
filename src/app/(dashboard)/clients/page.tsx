@@ -160,7 +160,7 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-[var(--text)]">Clients</h1>
@@ -172,23 +172,23 @@ export default function ClientsPage() {
         </button>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук..."
             className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto pb-0.5">
           {["Всі", ...STATUSES].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${statusFilter === s ? "bg-[var(--accent)] text-black" : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"}`}>
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors cursor-pointer shrink-0 ${statusFilter === s ? "bg-[var(--accent)] text-black" : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"}`}>
               {s === "Всі" ? "Всі" : STATUS_LABELS[s]}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)]">

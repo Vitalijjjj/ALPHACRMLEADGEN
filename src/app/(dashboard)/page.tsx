@@ -340,7 +340,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="p-6 space-y-5 relative z-10">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 relative z-10">
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">

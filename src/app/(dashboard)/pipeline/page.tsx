@@ -216,7 +216,7 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-3 sm:p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div>
           <h1 className="text-lg font-semibold text-[var(--text)]">Pipeline</h1>
@@ -232,38 +232,31 @@ export default function PipelinePage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-3 flex-1 min-h-0 overflow-hidden">
-          {/* 2×4 active stages grid — fits any screen, no horizontal scroll */}
-          <div className="grid grid-cols-4 grid-rows-2 gap-2 flex-1 min-h-0">
-            {ACTIVE_COLS.map((col) => (
-              <KanbanColumn
-                key={col.id}
-                col={col}
-                items={filterCol(leads, col.id)}
-                onOpen={setOpenLead}
-              />
-            ))}
-          </div>
-
-          <div className="w-px bg-[var(--border)] opacity-40 shrink-0" />
-
-          {/* Win / Loss always visible on the right */}
-          <div className="flex flex-col gap-2 w-44 shrink-0 min-h-0">
-            <div className="flex-1 min-h-0">
-              <KanbanColumn
-                col={WIN_COL}
-                items={filterCol(leads, "WON")}
-                onOpen={setOpenLead}
-                isWin
-              />
+        {/* Outer: scrolls horizontally on mobile, fills height on desktop */}
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+          <div className="flex gap-3 min-h-full h-full" style={{ minWidth: 900 }}>
+            {/* Active columns: 4-col grid on desktop, inline-flex on mobile */}
+            <div className="grid grid-cols-4 grid-rows-2 gap-2 flex-1 min-h-0" style={{ minWidth: 680 }}>
+              {ACTIVE_COLS.map((col) => (
+                <KanbanColumn
+                  key={col.id}
+                  col={col}
+                  items={filterCol(leads, col.id)}
+                  onOpen={setOpenLead}
+                />
+              ))}
             </div>
-            <div className="flex-1 min-h-0">
-              <KanbanColumn
-                col={LOSS_COL}
-                items={filterCol(leads, "LOST")}
-                onOpen={setOpenLead}
-                isLoss
-              />
+
+            <div className="w-px bg-[var(--border)] opacity-40 shrink-0" />
+
+            {/* Win / Loss */}
+            <div className="flex flex-col gap-2 w-44 shrink-0 min-h-0">
+              <div className="flex-1 min-h-0">
+                <KanbanColumn col={WIN_COL} items={filterCol(leads, "WON")} onOpen={setOpenLead} isWin />
+              </div>
+              <div className="flex-1 min-h-0">
+                <KanbanColumn col={LOSS_COL} items={filterCol(leads, "LOST")} onOpen={setOpenLead} isLoss />
+              </div>
             </div>
           </div>
         </div>

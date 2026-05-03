@@ -200,7 +200,7 @@ export default function LeadDrawer({
     return (
       <div className="fixed inset-0 z-40 flex">
         <div className="absolute inset-0 bg-black/40 z-0" onClick={onClose} />
-        <div className="relative z-10 ml-auto w-full max-w-xl bg-[var(--surface)] flex items-center justify-center">
+        <div className="relative z-10 ml-auto w-full sm:max-w-xl bg-[var(--surface)] flex items-center justify-center">
           <span className="text-[var(--text-muted)] text-sm">Завантаження...</span>
         </div>
       </div>
@@ -211,7 +211,7 @@ export default function LeadDrawer({
     <>
       <div className="fixed inset-0 z-40 flex">
         <div className="absolute inset-0 bg-black/40 z-0" onClick={onClose} />
-        <div className="relative z-10 ml-auto w-full max-w-xl bg-[var(--surface)] border-l border-[var(--border)] flex flex-col h-full overflow-hidden shadow-2xl">
+        <div className="relative z-10 ml-auto w-full sm:max-w-xl bg-[var(--surface)] border-l border-[var(--border)] flex flex-col h-full overflow-hidden shadow-2xl">
           {/* Header */}
           <div className="flex items-start justify-between px-5 py-4 border-b border-[var(--border)]">
             <div>
