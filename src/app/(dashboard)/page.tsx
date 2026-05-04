@@ -62,7 +62,7 @@ function buildDailyData(
 const STATS_EMPTY = {
   totalLeads: 0, totalDeals: 0, totalTasks: 0, taskDone: 0, recentLeads: [] as never[],
   overdueTasks: 0, leadsByStatus: [] as never[], dealsByStatus: [] as never[],
-  conversion: 0, leadsBySource: [] as never[], totalAmount: 0, wonLeads: 0, lostLeads: 0,
+  conversion: 0, leadsBySource: [] as never[], totalAmount: 0, potentialAmount: 0, wonLeads: 0, lostLeads: 0,
   monthlyLeads: 0, monthlyGrowth: 0, wonAmount: 0, activePipeline: 0, avgLeadValue: 0,
   todayLeadsBySource: [] as never[], currentMonthData: [] as never[], prevMonthData: [] as never[],
   targetedCurrentMonth: 0, targetedPrevMonth: 0, lastMonthLeads: 0,
@@ -86,6 +86,7 @@ async function getStats() {
     dealsByStatus,
     leadsBySource,
     amountAgg,
+    potentialAmountAgg,
     wonLeads,
     lostLeads,
     monthlyLeads,
@@ -118,6 +119,7 @@ async function getStats() {
       orderBy: { _count: { source: "desc" } }, take: 5,
     }),
     db.lead.aggregate({ _sum: { amount: true } }),
+    db.lead.aggregate({ _sum: { amount: true }, where: { status: { notIn: ["WON", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE", "LOST"] } } }),
     db.lead.count({ where: { status: "WON" } }),
     db.lead.count({ where: { status: { in: ["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"] } } }),
     db.lead.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -156,6 +158,7 @@ async function getStats() {
 
   const conversion = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
   const totalAmount = amountAgg._sum.amount ?? 0;
+  const potentialAmount = potentialAmountAgg._sum.amount ?? 0;
   const wonAmount = wonAmountAgg._sum.amount ?? 0;
   const activePipeline = activeDealsBudget._sum.budget ?? 0;
   const avgLeadValue = totalLeads > 0 ? Math.round(totalAmount / totalLeads) : 0;
@@ -179,7 +182,7 @@ async function getStats() {
   return {
     totalLeads, totalDeals, totalTasks, taskDone, recentLeads,
     overdueTasks, leadsByStatus, dealsByStatus, conversion,
-    leadsBySource, totalAmount, wonLeads, lostLeads,
+    leadsBySource, totalAmount, potentialAmount, wonLeads, lostLeads,
     monthlyLeads, monthlyGrowth, wonAmount, activePipeline, avgLeadValue,
     todayLeadsBySource, currentMonthData, prevMonthData,
     targetedCurrentMonth, targetedPrevMonth, lastMonthLeads,
@@ -275,9 +278,9 @@ export default async function DashboardPage() {
     },
     {
       label: "Потенційні гроші",
-      sub: "Загальна сума лідів",
-      value: `€${stats.totalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-      trend: `€${stats.avgLeadValue.toLocaleString("en-US")} середня / лід`,
+      sub: "Активні ліди",
+      value: `€${stats.potentialAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+      trend: stats.wonAmount > 0 ? `€${stats.wonAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })} зароблено` : `€${stats.avgLeadValue.toLocaleString("en-US")} середня / лід`,
       trendUp: true,
       Icon: Euro,
       color: "#C98C0A",

@@ -162,7 +162,10 @@ export default function LeadsPage() {
     fetchLeads();
   }
 
-  const totalAmount = leads.reduce((s, l) => s + (l.amount ?? 0), 0);
+  const LOSS_STATUSES = new Set(["NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"]);
+  const potentialAmount = leads.reduce((s, l) =>
+    l.status !== "WON" && !LOSS_STATUSES.has(l.status) ? s + (l.amount ?? 0) : s, 0);
+  const wonAmount = leads.reduce((s, l) => l.status === "WON" ? s + (l.amount ?? 0) : s, 0);
 
   const sortedLeads = [...leads].sort((a, b) => {
     const diff = new Date(a[sortBy]).getTime() - new Date(b[sortBy]).getTime();
@@ -177,9 +180,14 @@ export default function LeadsPage() {
           <h1 className="text-lg font-semibold text-[var(--text)]">Leads</h1>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
             {leads.length} контактів
-            {totalAmount > 0 && (
+            {potentialAmount > 0 && (
               <span className="ml-2 font-medium" style={{ color: "var(--accent)" }}>
-                · €{totalAmount.toLocaleString()} загальна сума
+                · €{potentialAmount.toLocaleString()} потенційно
+              </span>
+            )}
+            {wonAmount > 0 && (
+              <span className="ml-2 font-medium" style={{ color: "#22c55e" }}>
+                · €{wonAmount.toLocaleString()} зароблено
               </span>
             )}
           </p>
