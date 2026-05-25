@@ -31,24 +31,29 @@ export interface LeadFormData {
   projectDeadline: string;
   pushAt: string;
   pushComment: string;
+  pushStage: string;
+  messenger: string;
   createdAt: string;
 }
 
 const STATUSES = [
-  { value: "NEW_LEAD",       label: "Новий лід" },
-  { value: "CONTACTED",      label: "Звʼязався" },
-  { value: "CALL_BACK",      label: "Передзвонити" },
-  { value: "MISSED_CALL",    label: "Недозвон" },
-  { value: "TARGETED",       label: "Цільовий" },
-  { value: "PROPOSAL",       label: "КП" },
-  { value: "INTERESTED",     label: "Цікаво" },
-  { value: "THINKING",       label: "Думає" },
-  { value: "WON",            label: "Виграш — Продаж" },
-  { value: "NOT_INTERESTED", label: "Програш — Не цікаво" },
-  { value: "DUPLICATE",      label: "Програш — Дубль" },
-  { value: "UNREACHABLE",    label: "Програш — Не змогли звʼязатись" },
-  { value: "NOT_TARGET",     label: "Програш — не ЦА" },
-  { value: "TOO_EXPENSIVE",  label: "Програш — Дорого" },
+  { value: "NEW_LEAD",           label: "Новий лід" },
+  { value: "CONTACTED",          label: "Звʼязався" },
+  { value: "WRITTEN",            label: "Написав" },
+  { value: "CALL_BACK",          label: "Передзвонити" },
+  { value: "MISSED_CALL",        label: "Недозвон" },
+  { value: "TARGETED",           label: "Цільовий" },
+  { value: "SCHEDULED_PROPOSAL", label: "Назначив КП" },
+  { value: "PROPOSAL",           label: "КП" },
+  { value: "INTERESTED",         label: "Цікаво" },
+  { value: "THINKING",           label: "Думає" },
+  { value: "WON",                label: "Виграш — Продаж" },
+  { value: "NOT_INTERESTED",     label: "Програш — Не цікаво" },
+  { value: "COMPETITORS",        label: "Програш — Працюють з іншими" },
+  { value: "DUPLICATE",          label: "Програш — Дубль" },
+  { value: "UNREACHABLE",        label: "Програш — Не змогли звʼязатись" },
+  { value: "NOT_TARGET",         label: "Програш — не ЦА" },
+  { value: "TOO_EXPENSIVE",      label: "Програш — Дорого" },
 ];
 
 const SOURCES: { value: string; detail?: string }[] = [
@@ -106,6 +111,8 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     projectDeadline: initial?.projectDeadline ?? "",
     pushAt: initial?.pushAt ?? "",
     pushComment: initial?.pushComment ?? "",
+    pushStage: initial?.pushStage ?? "",
+    messenger: initial?.messenger ?? "",
     createdAt: initial?.createdAt ?? new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);

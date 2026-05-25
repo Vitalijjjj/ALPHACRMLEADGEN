@@ -57,6 +57,8 @@ interface LeadDetail {
   pushAt: string | null;
   pushSent: boolean;
   pushComment: string | null;
+  pushStage: string | null;
+  messenger: string | null;
   createdAt: string;
   tasks: Task[];
   activities: Activity[];
@@ -64,21 +66,27 @@ interface LeadDetail {
 }
 
 const STATUSES = [
-  { value: "NEW_LEAD",       label: "Новий лід",    accent: "#C98C0A" },
-  { value: "CONTACTED",      label: "Звʼязався",      accent: "#22d3ee" },
-  { value: "CALL_BACK",      label: "Передзвонити",  accent: "#818cf8" },
-  { value: "MISSED_CALL",    label: "Недозвон",       accent: "#f59e0b" },
-  { value: "TARGETED",       label: "Цільовий",     accent: "#22c55e" },
-  { value: "PROPOSAL",       label: "КП",           accent: "#a78bfa" },
-  { value: "INTERESTED",     label: "Цікаво",       accent: "#34d399" },
-  { value: "THINKING",       label: "Думає",        accent: "#60a5fa" },
-  { value: "WON",            label: "Виграш",       accent: "#22c55e" },
-  { value: "NOT_INTERESTED", label: "Не цікаво",    accent: "#f87171" },
-  { value: "DUPLICATE",      label: "Дубль",        accent: "#f87171" },
-  { value: "UNREACHABLE",    label: "Не дозвонились", accent: "#f87171" },
-  { value: "NOT_TARGET",     label: "не ЦА",        accent: "#f87171" },
-  { value: "TOO_EXPENSIVE",  label: "Дорого",       accent: "#f87171" },
+  { value: "NEW_LEAD",           label: "Новий лід",         accent: "#C98C0A" },
+  { value: "CONTACTED",          label: "Звʼязався",          accent: "#22d3ee" },
+  { value: "WRITTEN",            label: "Написав",            accent: "#38bdf8" },
+  { value: "CALL_BACK",          label: "Передзвонити",       accent: "#818cf8" },
+  { value: "MISSED_CALL",        label: "Недозвон",           accent: "#f59e0b" },
+  { value: "TARGETED",           label: "Цільовий",          accent: "#22c55e" },
+  { value: "SCHEDULED_PROPOSAL", label: "Назначив КП",       accent: "#fb923c" },
+  { value: "PROPOSAL",           label: "КП",                accent: "#a78bfa" },
+  { value: "INTERESTED",         label: "Цікаво",            accent: "#34d399" },
+  { value: "THINKING",           label: "Думає",             accent: "#60a5fa" },
+  { value: "WON",                label: "Виграш",            accent: "#22c55e" },
+  { value: "NOT_INTERESTED",     label: "Не цікаво",         accent: "#f87171" },
+  { value: "COMPETITORS",        label: "Працюють з іншими", accent: "#f87171" },
+  { value: "DUPLICATE",          label: "Дубль",             accent: "#f87171" },
+  { value: "UNREACHABLE",        label: "Не дозвонились",    accent: "#f87171" },
+  { value: "NOT_TARGET",         label: "не ЦА",             accent: "#f87171" },
+  { value: "TOO_EXPENSIVE",      label: "Дорого",            accent: "#f87171" },
 ];
+
+const PUSH_STAGES = ["Пуша 1", "Пуша 2", "Пуша 3", "Пуша 4", "Пуша 5"];
+const MESSENGERS  = ["Viber", "WhatsApp", "Telegram"];
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   NOTE: <MessageSquare size={12} />,
   STATUS_CHANGE: <AlertCircle size={12} />,
@@ -483,6 +491,67 @@ export default function LeadDrawer({
               </div>
             </div>
 
+            {/* Push Stage */}
+            <div>
+              <p className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wide">Пуші</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PUSH_STAGES.map((p) => {
+                  const active = lead.pushStage === p;
+                  return (
+                    <button
+                      key={p}
+                      onClick={async () => {
+                        await fetch(`/api/leads/${leadId}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ pushStage: active ? null : p }),
+                        });
+                        fetchLead();
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs transition-all cursor-pointer border"
+                      style={active
+                        ? { background: "rgba(251,146,60,0.15)", color: "#fb923c", borderColor: "rgba(251,146,60,0.4)" }
+                        : { background: "var(--surface-2)", color: "var(--text-muted)", borderColor: "var(--border)" }
+                      }
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Messenger */}
+            <div>
+              <p className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wide">Месенджер</p>
+              <div className="flex flex-wrap gap-1.5">
+                {MESSENGERS.map((m) => {
+                  const active = lead.messenger === m;
+                  const accent = m === "Viber" ? "#7360f2" : m === "WhatsApp" ? "#22c55e" : "#26A5E4";
+                  return (
+                    <button
+                      key={m}
+                      onClick={async () => {
+                        await fetch(`/api/leads/${leadId}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ messenger: active ? null : m }),
+                        });
+                        fetchLead();
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs transition-all cursor-pointer border"
+                      style={active
+                        ? { background: `${accent}22`, color: accent, borderColor: `${accent}55` }
+                        : { background: "var(--surface-2)", color: "var(--text-muted)", borderColor: "var(--border)" }
+                      }
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Deals */}
             {lead.deals.length > 0 && (
               <div>
@@ -657,6 +726,8 @@ export default function LeadDrawer({
             projectDeadline: lead.projectDeadline ?? "",
             pushAt: lead.pushAt ? lead.pushAt.slice(0, 16) : "",
             pushComment: lead.pushComment ?? "",
+            pushStage: lead.pushStage ?? "",
+            messenger: lead.messenger ?? "",
             createdAt: lead.createdAt.slice(0, 10),
           }}
         />

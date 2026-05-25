@@ -68,6 +68,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body.pushAt           !== undefined) data.pushAt           = body.pushAt ? parseWarsawDate(body.pushAt) : null;
     if (body.pushComment      !== undefined) data.pushComment      = body.pushComment || null;
     if (body.remindAt         !== undefined) data.remindAt         = body.remindAt ? new Date(body.remindAt) : null;
+    if (body.pushStage        !== undefined) data.pushStage        = body.pushStage || null;
+    if (body.messenger        !== undefined) data.messenger        = body.messenger || null;
     if (body.createdAt        !== undefined) data.createdAt        = body.createdAt ? new Date(body.createdAt) : undefined;
 
     const lead = await db.lead.update({ where: { id }, data });
