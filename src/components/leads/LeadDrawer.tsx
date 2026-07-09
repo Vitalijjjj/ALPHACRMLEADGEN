@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, Video, Globe, Layers, CreditCard, TrendingUp, Pencil } from "lucide-react";
 import { ALL_UPSELL_SERVICES, LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
+import { LEAD_STATUSES, LEAD_STATUS_SHORT, COMMUNICATION_CHANNELS, CHANNEL_ACCENT } from "@/lib/leadOptions";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TaskForm } from "@/components/tasks/TaskForm";
@@ -65,28 +66,15 @@ interface LeadDetail {
   deals: Deal[];
 }
 
-const STATUSES = [
-  { value: "NEW_LEAD",           label: "Новий лід",         accent: "#C98C0A" },
-  { value: "CONTACTED",          label: "Звʼязався",          accent: "#22d3ee" },
-  { value: "WRITTEN",            label: "Написав",            accent: "#38bdf8" },
-  { value: "CALL_BACK",          label: "Передзвонити",       accent: "#818cf8" },
-  { value: "MISSED_CALL",        label: "Недозвон",           accent: "#f59e0b" },
-  { value: "TARGETED",           label: "Цільовий",          accent: "#22c55e" },
-  { value: "SCHEDULED_PROPOSAL", label: "Назначив КП",       accent: "#fb923c" },
-  { value: "PROPOSAL",           label: "КП",                accent: "#a78bfa" },
-  { value: "INTERESTED",         label: "Цікаво",            accent: "#34d399" },
-  { value: "THINKING",           label: "Думає",             accent: "#60a5fa" },
-  { value: "WON",                label: "Виграш",            accent: "#22c55e" },
-  { value: "NOT_INTERESTED",     label: "Не цікаво",         accent: "#f87171" },
-  { value: "COMPETITORS",        label: "Працюють з іншими", accent: "#f87171" },
-  { value: "DUPLICATE",          label: "Дубль",             accent: "#f87171" },
-  { value: "UNREACHABLE",        label: "Не дозвонились",    accent: "#f87171" },
-  { value: "NOT_TARGET",         label: "не ЦА",             accent: "#f87171" },
-  { value: "TOO_EXPENSIVE",      label: "Дорого",            accent: "#f87171" },
-];
+// Status buttons use compact labels (short where defined, else full label).
+const STATUSES = LEAD_STATUSES.map((s) => ({
+  value: s.value,
+  label: LEAD_STATUS_SHORT[s.value] ?? s.label,
+  accent: s.accent,
+}));
 
 const PUSH_STAGES = ["Пуша 1", "Пуша 2", "Пуша 3", "Пуша 4", "Пуша 5"];
-const MESSENGERS  = ["Viber", "WhatsApp", "Telegram"];
+const MESSENGERS  = COMMUNICATION_CHANNELS;
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   NOTE: <MessageSquare size={12} />,
   STATUS_CHANGE: <AlertCircle size={12} />,
@@ -523,11 +511,11 @@ export default function LeadDrawer({
 
             {/* Messenger */}
             <div>
-              <p className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wide">Месенджер</p>
+              <p className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wide">Канал комунікації</p>
               <div className="flex flex-wrap gap-1.5">
                 {MESSENGERS.map((m) => {
                   const active = lead.messenger === m;
-                  const accent = m === "Viber" ? "#7360f2" : m === "WhatsApp" ? "#22c55e" : "#26A5E4";
+                  const accent = CHANNEL_ACCENT[m] ?? "#26A5E4";
                   return (
                     <button
                       key={m}

@@ -35,6 +35,7 @@ const LOSS_COL: ColDef = { id: "LOST", label: "Програш", accent: "#f87171
 
 const LOSS_REASONS = [
   { id: "NOT_INTERESTED", label: "Не цікаво" },
+  { id: "COMPETITORS",    label: "Працюють з іншими" },
   { id: "DUPLICATE",      label: "Дубль" },
   { id: "UNREACHABLE",    label: "Не змогли звʼязатись" },
   { id: "NOT_TARGET",     label: "не ЦА" },
@@ -44,11 +45,14 @@ const LOSS_REASONS = [
 const LOSS_IDS   = new Set(LOSS_REASONS.map((r) => r.id));
 const LOSS_LABEL = Object.fromEntries(LOSS_REASONS.map((r) => [r.id, r.label]));
 
-// backward compat: old status strings → new column ids
+// Fold detailed statuses into the coarse board columns so no lead disappears.
+const PROPOSAL_STAGES = new Set(["SCHEDULED_PROPOSAL", "SET_PROPOSAL", "SEND_REPORT", "TOUCH_1", "TOUCH_2", "TOUCH_3"]);
 function norm(s: string): string {
   if (s === "NEW") return "NEW_LEAD";
   if (s === "NEGOTIATION") return "PROPOSAL";
   if (s === "LOST") return "NOT_INTERESTED";
+  if (s === "WRITTEN") return "CONTACTED";
+  if (PROPOSAL_STAGES.has(s)) return "PROPOSAL";
   return s;
 }
 

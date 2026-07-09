@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LEAD_STATUSES as STATUSES, LEAD_SOURCES as SOURCES, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS } from "@/lib/leadOptions";
 
 interface LeadFormProps {
   onSave: (data: LeadFormData) => Promise<void>;
@@ -36,47 +37,6 @@ export interface LeadFormData {
   createdAt: string;
 }
 
-const STATUSES = [
-  { value: "NEW_LEAD",           label: "Новий лід" },
-  { value: "CONTACTED",          label: "Звʼязався" },
-  { value: "WRITTEN",            label: "Написав" },
-  { value: "CALL_BACK",          label: "Передзвонити" },
-  { value: "MISSED_CALL",        label: "Недозвон" },
-  { value: "TARGETED",           label: "Цільовий" },
-  { value: "SCHEDULED_PROPOSAL", label: "Назначив КП" },
-  { value: "PROPOSAL",           label: "КП" },
-  { value: "INTERESTED",         label: "Цікаво" },
-  { value: "THINKING",           label: "Думає" },
-  { value: "WON",                label: "Виграш — Продаж" },
-  { value: "NOT_INTERESTED",     label: "Програш — Не цікаво" },
-  { value: "COMPETITORS",        label: "Програш — Працюють з іншими" },
-  { value: "DUPLICATE",          label: "Програш — Дубль" },
-  { value: "UNREACHABLE",        label: "Програш — Не змогли звʼязатись" },
-  { value: "NOT_TARGET",         label: "Програш — не ЦА" },
-  { value: "TOO_EXPENSIVE",      label: "Програш — Дорого" },
-];
-
-const SOURCES: { value: string; detail?: string }[] = [
-  { value: "IG органіка Артур" },
-  { value: "IG органіка Вітал" },
-  { value: "IG Розсилки",      detail: "Нікнейм акаунту" },
-  { value: "Таргет",           detail: "Назва кампанії" },
-  { value: "Контекст" },
-  { value: "Сайт" },
-  { value: "Сарафанне радіо",  detail: "Від якого клієнта" },
-  { value: "Партнерка",        detail: "Хто партнер" },
-];
-
-const SERVICES = [
-  "АІ лендос",
-  "АІ корпоративний",
-  "АІ каталог",
-  "ШБ лендинг",
-  "ШБ Корпоративний",
-  "ШБ Інтернет магазин",
-  "Індив Інтернет магазин",
-];
-
 const SHOP_SERVICES = ["ШБ Інтернет магазин", "Індив Інтернет магазин"];
 const PAYMENT_SYSTEMS = ["MonoPay", "LiqPay", "WayForPay", "Fondy", "Portmone", "Інше"];
 
@@ -100,7 +60,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     geo: initial?.geo ?? "",
     niche: initial?.niche ?? "",
     amount: initial?.amount ?? "",
-    status: initial?.status ?? "NEW",
+    status: initial?.status ?? "NEW_LEAD",
     siteStructure: initial?.siteStructure ?? "",
     hasExtraLang: initial?.hasExtraLang ?? false,
     languages: initial?.languages ?? "",
@@ -224,6 +184,14 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
               <label className={lbl}>Ніша</label>
               <input value={data.niche} onChange={set("niche")} className={f} placeholder="e-comm..." />
             </div>
+          </div>
+
+          <div>
+            <label className={lbl}>Канал комунікації</label>
+            <select value={data.messenger} onChange={set("messenger")} className={`${f} cursor-pointer`}>
+              <option value="">— де переписка —</option>
+              {COMMUNICATION_CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-2">

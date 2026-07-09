@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Phone, Mail, ExternalLink, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp } from "lucide-react";
+import { Plus, Search, Phone, Mail, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp, Filter, X } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import LeadDrawer from "@/components/leads/LeadDrawer";
+import { LEAD_STATUSES, LEAD_SOURCES, LOSS_STATUSES, CHANNEL_ACCENT } from "@/lib/leadOptions";
 import { formatDistanceToNow } from "date-fns";
 import { uk } from "date-fns/locale";
 
@@ -37,27 +38,29 @@ interface Lead {
   projectDeadline: string | null;
   pushAt: string | null;
   pushComment: string | null;
+  messenger: string | null;
+  sourceDetail: string | null;
   createdAt: string;
   updatedAt: string;
   _count: { tasks: number; deals: number };
 }
 
 const STATUS_OPTIONS = [
-  { value: "",               label: "Всі статуси" },
-  { value: "NEW_LEAD",       label: "Новий лід" },
-  { value: "CONTACTED",      label: "Звʼязався" },
-  { value: "MISSED_CALL",    label: "Недозвон" },
-  { value: "TARGETED",       label: "Цільовий" },
-  { value: "PROPOSAL",       label: "КП" },
-  { value: "INTERESTED",     label: "Цікаво" },
-  { value: "THINKING",       label: "Думає" },
-  { value: "WON",            label: "Виграш — Продаж" },
-  { value: "NOT_INTERESTED", label: "Програш — Не цікаво" },
-  { value: "DUPLICATE",      label: "Програш — Дубль" },
-  { value: "UNREACHABLE",    label: "Програш — Не змогли звʼязатись" },
-  { value: "NOT_TARGET",     label: "Програш — не ЦА" },
-  { value: "TOO_EXPENSIVE",  label: "Програш — Дорого" },
+  { value: "", label: "Всі статуси" },
+  ...LEAD_STATUSES.map((s) => ({ value: s.value, label: s.label })),
 ];
+
+function ChannelChip({ channel }: { channel: string }) {
+  const accent = CHANNEL_ACCENT[channel] ?? "#26A5E4";
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border"
+      style={{ color: accent, borderColor: `${accent}55`, background: `${accent}18` }}
+    >
+      {channel}
+    </span>
+  );
+}
 
 function InstagramLink({ username }: { username: string }) {
   return (
@@ -99,6 +102,11 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [openLead, setOpenLead] = useState<string | null>(null);
@@ -113,11 +121,26 @@ export default function LeadsPage() {
     const params = new URLSearchParams();
     if (search) params.set("q", search);
     if (statusFilter) params.set("status", statusFilter);
+    if (sourceFilter) params.set("source", sourceFilter);
+    if (campaignFilter) params.set("campaign", campaignFilter);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
     const res = await fetch(`/api/leads?${params}`);
     if (!res.ok) return;
     setLeads(await res.json());
     setLoading(false);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, sourceFilter, campaignFilter, dateFrom, dateTo]);
+
+  const activeFilterCount =
+    (statusFilter ? 1 : 0) + (sourceFilter ? 1 : 0) + (campaignFilter ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+
+  function resetFilters() {
+    setStatusFilter("");
+    setSourceFilter("");
+    setCampaignFilter("");
+    setDateFrom("");
+    setDateTo("");
+  }
 
   useEffect(() => {
     setSearching(true);
@@ -162,9 +185,9 @@ export default function LeadsPage() {
     fetchLeads();
   }
 
-  const LOSS_STATUSES = new Set(["NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"]);
+  const lossSet = new Set(LOSS_STATUSES);
   const potentialAmount = leads.reduce((s, l) =>
-    l.status !== "WON" && !LOSS_STATUSES.has(l.status) ? s + (l.amount ?? 0) : s, 0);
+    l.status !== "WON" && !lossSet.has(l.status) ? s + (l.amount ?? 0) : s, 0);
   const wonAmount = leads.reduce((s, l) => l.status === "WON" ? s + (l.amount ?? 0) : s, 0);
 
   const sortedLeads = [...leads].sort((a, b) => {
@@ -227,6 +250,23 @@ export default function LeadsPage() {
             ))}
           </select>
 
+          {/* Filters toggle */}
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors cursor-pointer shrink-0"
+            style={showFilters || activeFilterCount > 0
+              ? { background: "var(--accent-subtle)", borderColor: "var(--accent)", color: "var(--accent)" }
+              : { background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+          >
+            <Filter size={14} />
+            Фільтри
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-black" style={{ background: "var(--accent)" }}>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
           {/* Sort switch */}
           <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5 shrink-0">
             <button
@@ -252,6 +292,45 @@ export default function LeadsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Expandable filter panel ── */}
+      {showFilters && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 sm:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата від</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата до</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Джерело</label>
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
+                <option value="">Всі джерела</option>
+                {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Назва кампанії</label>
+              <input type="text" value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} placeholder="Пошук по кампанії..."
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]" />
+            </div>
+          </div>
+          {activeFilterCount > 0 && (
+            <div className="flex justify-end mt-3">
+              <button onClick={resetFilters}
+                className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
+                <X size={12} /> Скинути фільтри
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Mobile cards (< sm) ── */}
       <div className="block sm:hidden space-y-2">
@@ -298,6 +377,7 @@ export default function LeadsPage() {
                 </button>
               )}
               {lead.source && <span className="text-xs text-[var(--text-muted)]">{lead.source}</span>}
+              {lead.messenger && <ChannelChip channel={lead.messenger} />}
               {lead.amount ? (
                 <span className="text-xs font-semibold ml-auto" style={{ color: "var(--accent)" }}>
                   €{lead.amount.toLocaleString()}
@@ -369,6 +449,7 @@ export default function LeadsPage() {
                 <td className="px-4 py-3">
                   <div className="text-xs text-[var(--text-muted)]">{lead.source ?? "—"}</div>
                   {lead.geo && <div className="text-xs text-[var(--text-dim)]">{lead.geo}</div>}
+                  {lead.messenger && <div className="mt-1"><ChannelChip channel={lead.messenger} /></div>}
                 </td>
                 <td className="px-4 py-3">
                   {lead.amount
@@ -413,6 +494,7 @@ export default function LeadsPage() {
               email: editLead.email ?? "",
               comment: editLead.comment ?? "",
               source: editLead.source ?? "",
+              sourceDetail: editLead.sourceDetail ?? "",
               geo: editLead.geo ?? "",
               niche: editLead.niche ?? "",
               amount: editLead.amount?.toString() ?? "",
@@ -427,6 +509,7 @@ export default function LeadsPage() {
               projectDeadline: editLead.projectDeadline ?? "",
               pushAt: editLead.pushAt ? toWarsawInput(editLead.pushAt) : "",
               pushComment: editLead.pushComment ?? "",
+              messenger: editLead.messenger ?? "",
               createdAt: editLead.createdAt?.slice(0, 10) ?? "",
             }}
           />

@@ -10,12 +10,26 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("q") ?? "";
   const status = searchParams.get("status") ?? undefined;
   const source = searchParams.get("source") ?? undefined;
+  const campaign = searchParams.get("campaign") ?? undefined;
+  const dateFrom = searchParams.get("dateFrom") ?? undefined;
+  const dateTo = searchParams.get("dateTo") ?? undefined;
+
+  // Campaign name is stored in Lead.sourceDetail (e.g. for "Таргет" source).
+  const createdAt: { gte?: Date; lte?: Date } = {};
+  if (dateFrom) createdAt.gte = new Date(dateFrom);
+  if (dateTo) {
+    const end = new Date(dateTo);
+    end.setHours(23, 59, 59, 999);
+    createdAt.lte = end;
+  }
 
   try {
     const leads = await db.lead.findMany({
       where: {
         ...(status ? { status } : {}),
         ...(source ? { source } : {}),
+        ...(campaign ? { sourceDetail: { contains: campaign, mode: "insensitive" } } : {}),
+        ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
         ...(search
           ? {
               OR: [

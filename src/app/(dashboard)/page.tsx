@@ -1,7 +1,11 @@
 export const dynamic = "force-dynamic";
 
+import type { Prisma } from "@prisma/client";
+import { Suspense } from "react";
 import { db } from "@/lib/db";
 import Link from "next/link";
+import OverviewFilters from "@/components/dashboard/OverviewFilters";
+import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL } from "@/lib/leadOptions";
 import {
   Users,
   Briefcase,
@@ -51,8 +55,8 @@ function buildDailyData(
     const d = new Date(lead.createdAt).getDate() - 1;
     if (d < 0 || d >= maxDay) continue;
     days[d].total++;
-    if (["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"].includes(lead.status)) days[d].targeted++;
-    if (["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"].includes(lead.status)) days[d].lost++;
+    if (TARGETED_STATUSES.includes(lead.status)) days[d].targeted++;
+    if (LOSS_STATUSES_ALL.includes(lead.status)) days[d].lost++;
     if (lead.status === "WON") days[d].won++;
   }
 
@@ -69,11 +73,62 @@ const STATS_EMPTY = {
   currentMonthLabel: "", prevMonthLabel: "",
 };
 
-async function getStats() {
+export interface OverviewFilterValues {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  niche?: string;
+  source?: string;
+  campaign?: string;
+  geo?: string;
+  amount?: string;
+  service?: string;
+}
+
+type DateRange = { gte?: Date; lte?: Date };
+
+// Extract a createdAt range from the date filters (shared by lead/deal/task queries).
+function buildDateRange(f: OverviewFilterValues): DateRange | undefined {
+  const range: DateRange = {};
+  if (f.dateFrom) range.gte = new Date(f.dateFrom);
+  if (f.dateTo) {
+    const end = new Date(f.dateTo);
+    end.setHours(23, 59, 59, 999);
+    range.lte = end;
+  }
+  return range.gte || range.lte ? range : undefined;
+}
+
+// Build a Prisma Lead where-clause from Overview filters. Campaign lives in sourceDetail.
+function buildLeadWhere(f: OverviewFilterValues): Prisma.LeadWhereInput {
+  const where: Prisma.LeadWhereInput = {};
+  const range = buildDateRange(f);
+  if (range) where.createdAt = range;
+  if (f.status) where.status = f.status;
+  if (f.source) where.source = f.source;
+  if (f.service) where.service = f.service;
+  if (f.niche) where.niche = { contains: f.niche, mode: "insensitive" };
+  if (f.geo) where.geo = { contains: f.geo, mode: "insensitive" };
+  if (f.campaign) where.sourceDetail = { contains: f.campaign, mode: "insensitive" };
+  if (f.amount) {
+    const min = parseFloat(f.amount);
+    if (!Number.isNaN(min)) where.amount = { gte: min };
+  }
+  return where;
+}
+
+async function getStats(filters: OverviewFilterValues = {}) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const where = buildLeadWhere(filters);
+  // Combine the base filter with an extra clause (e.g. a month range).
+  const merge = (extra: Prisma.LeadWhereInput): Prisma.LeadWhereInput => ({ AND: [where, extra] });
+  // Date-only filter applied to non-lead entities (deals/tasks) so they follow the date range too.
+  const range = buildDateRange(filters);
+  const dateWhere: { createdAt?: DateRange } = range ? { createdAt: range } : {};
 
   const [
     totalLeads,
@@ -99,11 +154,12 @@ async function getStats() {
     targetedCurrentMonth,
     targetedPrevMonth,
   ] = await Promise.all([
-    db.lead.count(),
-    db.deal.count(),
-    db.task.count({ where: { status: { not: "DONE" } } }),
-    db.task.count({ where: { status: "DONE" } }),
+    db.lead.count({ where }),
+    db.deal.count({ where: dateWhere }),
+    db.task.count({ where: { status: { not: "DONE" }, ...dateWhere } }),
+    db.task.count({ where: { status: "DONE", ...dateWhere } }),
     db.lead.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       take: 8,
       select: {
@@ -111,48 +167,42 @@ async function getStats() {
         phone: true, source: true, amount: true, createdAt: true,
       },
     }),
-    db.task.count({ where: { status: { not: "DONE" }, deadline: { lt: now } } }),
-    db.lead.groupBy({ by: ["status"], _count: { status: true } }),
-    db.deal.groupBy({ by: ["status"], _count: { status: true } }),
+    db.task.count({ where: { status: { not: "DONE" }, deadline: { lt: now }, ...dateWhere } }),
+    db.lead.groupBy({ by: ["status"], _count: { status: true }, where }),
+    db.deal.groupBy({ by: ["status"], _count: { status: true }, where: dateWhere }),
     db.lead.groupBy({
-      by: ["source"], _count: { source: true },
+      by: ["source"], _count: { source: true }, where,
       orderBy: { _count: { source: "desc" } }, take: 5,
     }),
-    db.lead.aggregate({ _sum: { amount: true } }),
-    db.lead.aggregate({ _sum: { amount: true }, where: { status: { notIn: ["WON", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE", "LOST"] } } }),
-    db.lead.count({ where: { status: "WON" } }),
-    db.lead.count({ where: { status: { in: ["LOST", "NOT_INTERESTED", "DUPLICATE", "UNREACHABLE", "NOT_TARGET", "TOO_EXPENSIVE"] } } }),
-    db.lead.count({ where: { createdAt: { gte: startOfMonth } } }),
-    db.lead.count({ where: { createdAt: { gte: startOfLastMonth, lt: startOfMonth } } }),
-    db.lead.aggregate({ _sum: { amount: true }, where: { status: "WON" } }),
-    db.deal.aggregate({ _sum: { budget: true }, where: { status: { not: "COMPLETED" } } }),
+    db.lead.aggregate({ _sum: { amount: true }, where }),
+    db.lead.aggregate({ _sum: { amount: true }, where: merge({ status: { notIn: LOSS_STATUSES_ALL.concat("WON") } }) }),
+    db.lead.count({ where: merge({ status: "WON" }) }),
+    db.lead.count({ where: merge({ status: { in: LOSS_STATUSES_ALL } }) }),
+    db.lead.count({ where: merge({ createdAt: { gte: startOfMonth } }) }),
+    db.lead.count({ where: merge({ createdAt: { gte: startOfLastMonth, lt: startOfMonth } }) }),
+    db.lead.aggregate({ _sum: { amount: true }, where: merge({ status: "WON" }) }),
+    db.deal.aggregate({ _sum: { budget: true }, where: { status: { not: "COMPLETED" }, ...dateWhere } }),
     db.lead.groupBy({
       by: ["source"],
       _count: { source: true },
-      where: { createdAt: { gte: startOfDay } },
+      where: merge({ createdAt: { gte: startOfDay } }),
       orderBy: { _count: { source: "desc" } },
     }),
     db.lead.findMany({
-      where: { createdAt: { gte: startOfMonth } },
+      where: merge({ createdAt: { gte: startOfMonth } }),
       select: { createdAt: true, status: true },
       orderBy: { createdAt: "asc" },
     }),
     db.lead.findMany({
-      where: { createdAt: { gte: startOfLastMonth, lt: startOfMonth } },
+      where: merge({ createdAt: { gte: startOfLastMonth, lt: startOfMonth } }),
       select: { createdAt: true, status: true },
       orderBy: { createdAt: "asc" },
     }),
     db.lead.count({
-      where: {
-        createdAt: { gte: startOfMonth },
-        status: { in: ["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"] },
-      },
+      where: merge({ createdAt: { gte: startOfMonth }, status: { in: TARGETED_STATUSES } }),
     }),
     db.lead.count({
-      where: {
-        createdAt: { gte: startOfLastMonth, lt: startOfMonth },
-        status: { in: ["CONTACTED", "TARGETED", "PROPOSAL", "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION"] },
-      },
+      where: merge({ createdAt: { gte: startOfLastMonth, lt: startOfMonth }, status: { in: TARGETED_STATUSES } }),
     }),
   ]);
 
@@ -190,37 +240,44 @@ async function getStats() {
   };
 }
 
-async function getStatsSafe() {
+async function getStatsSafe(filters: OverviewFilterValues) {
   try {
-    return await getStats();
+    return await getStats(filters);
   } catch (e) {
     console.error("Dashboard getStats error:", e);
     return STATS_EMPTY;
   }
 }
 
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  NEW:         { label: "Новий лід",   cls: "text-amber-400 bg-amber-400/10 border border-amber-400/20" },
-  NEW_LEAD:    { label: "Новий лід",   cls: "text-amber-400 bg-amber-400/10 border border-amber-400/20" },
-  CONTACTED:   { label: "Звʼязався",  cls: "text-cyan-400 bg-cyan-400/10 border border-cyan-400/20" },
-  MISSED_CALL: { label: "Недозвон",   cls: "text-orange-400 bg-orange-400/10 border border-orange-400/20" },
-  TARGETED:    { label: "Цільовий",   cls: "text-green-400 bg-green-400/10 border border-green-400/20" },
-  PROPOSAL:    { label: "КП",         cls: "text-violet-400 bg-violet-400/10 border border-violet-400/20" },
-  NEGOTIATION: { label: "КП",         cls: "text-violet-400 bg-violet-400/10 border border-violet-400/20" },
-  INTERESTED:  { label: "Цікаво",     cls: "text-teal-400 bg-teal-400/10 border border-teal-400/20" },
-  THINKING:    { label: "Думає",      cls: "text-blue-400 bg-blue-400/10 border border-blue-400/20" },
-  CLOSE:       { label: "Закрити",    cls: "text-rose-400 bg-rose-400/10 border border-rose-400/20" },
-  WON:         { label: "Виграш",     cls: "text-green-400 bg-green-400/10 border border-green-400/20" },
-  LOST:            { label: "Програш",              cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
-  NOT_INTERESTED:  { label: "Не цікаво",            cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
-  DUPLICATE:       { label: "Дубль",                cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
-  UNREACHABLE:     { label: "Не змогли звʼязатись", cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
-  NOT_TARGET:      { label: "не ЦА",                cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
-  TOO_EXPENSIVE:   { label: "Дорого",               cls: "text-red-400 bg-red-400/10 border border-red-400/20" },
-};
+const STATUS_BADGE: Record<string, { label: string; cls: string }> = Object.fromEntries(
+  Object.keys(LEAD_STATUS_BADGE_LABEL).map((k) => [
+    k,
+    { label: LEAD_STATUS_BADGE_LABEL[k], cls: `${LEAD_STATUS_BADGE[k]} border` },
+  ])
+);
 
-export default async function DashboardPage() {
-  const stats = await getStatsSafe();
+function firstParam(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const filters: OverviewFilterValues = {
+    dateFrom: firstParam(sp.dateFrom),
+    dateTo: firstParam(sp.dateTo),
+    status: firstParam(sp.status),
+    niche: firstParam(sp.niche),
+    source: firstParam(sp.source),
+    campaign: firstParam(sp.campaign),
+    geo: firstParam(sp.geo),
+    amount: firstParam(sp.amount),
+    service: firstParam(sp.service),
+  };
+  const stats = await getStatsSafe(filters);
   const taskTotal = stats.taskDone + stats.totalTasks;
   const todayTotal = stats.todayLeadsBySource.reduce((s, l) => s + l._count.source, 0);
 
@@ -344,6 +401,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 relative z-10">
+
+      {/* ── Filters ── */}
+      <Suspense fallback={null}>
+        <OverviewFilters />
+      </Suspense>
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
