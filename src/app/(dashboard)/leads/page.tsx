@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Phone, Mail, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp, Filter, X } from "lucide-react";
+import { Plus, Search, Phone, Mail, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp, Filter, X, CalendarPlus } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
@@ -49,6 +49,112 @@ const STATUS_OPTIONS = [
   { value: "", label: "Всі статуси" },
   ...LEAD_STATUSES.map((s) => ({ value: s.value, label: s.label })),
 ];
+
+// Quick-add a lead to Google Calendar: pick date/time + event status label.
+const CALENDAR_STATUSES = ["НДЗ", "Перезвон", "Поставити КП", "КП"];
+
+function pad(n: number) {
+  return n.toString().padStart(2, "0");
+}
+
+function buildGCalUrl(lead: Lead, dateStr: string, timeStr: string, status: string): string {
+  // Floating local time — Google Calendar interprets it in the account's timezone.
+  const start = new Date(`${dateStr}T${timeStr || "09:00"}`);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const title = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
+  const details = [
+    lead.instagram ? `Instagram: @${lead.instagram}` : "",
+    lead.telegram ? `Telegram: @${lead.telegram}` : "",
+    lead.source ? `Джерело: ${lead.source}` : "",
+    "AlphaCRM",
+  ].filter(Boolean).join("\n");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function CalendarModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+  const now = new Date();
+  const [date, setDate] = useState(now.toISOString().slice(0, 10));
+  const [time, setTime] = useState(`${pad(now.getHours())}:00`);
+  const [status, setStatus] = useState(CALENDAR_STATUSES[0]);
+
+  const field = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors";
+  const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide";
+  const preview = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
+
+  function submit() {
+    const url = buildGCalUrl(lead, date, time, status);
+    window.open(url, "_blank", "noopener,noreferrer");
+    onClose();
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Додати в Google Календар">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={lbl}>Дата</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+          </div>
+          <div>
+            <label className={lbl}>Час</label>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
+          </div>
+        </div>
+
+        <div>
+          <label className={lbl}>Статус події</label>
+          <div className="flex flex-wrap gap-1.5">
+            {CALENDAR_STATUSES.map((s) => {
+              const active = status === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className="px-3 py-1 rounded-lg text-xs transition-all cursor-pointer border"
+                  style={active
+                    ? { background: "var(--accent-subtle)", color: "var(--accent)", borderColor: "var(--accent)" }
+                    : { background: "var(--surface-2)", color: "var(--text-muted)", borderColor: "var(--border)" }}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className={lbl}>Назва події</label>
+          <div className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--text)] break-words">
+            {preview}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
+            Скасувати
+          </button>
+          <button
+            onClick={submit}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg text-black transition-colors cursor-pointer"
+            style={{ background: "var(--accent)" }}
+          >
+            <CalendarPlus size={13} />
+            Додати в календар
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function ChannelChip({ channel }: { channel: string }) {
   const accent = CHANNEL_ACCENT[channel] ?? "#26A5E4";
@@ -109,6 +215,7 @@ export default function LeadsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
+  const [calendarLead, setCalendarLead] = useState<Lead | null>(null);
   const [openLead, setOpenLead] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -352,6 +459,13 @@ export default function LeadsPage() {
               <div className="shrink-0 flex items-center gap-1.5">
                 <Badge value={lead.status} />
                 <button
+                  onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }}
+                  title="Додати в Google Календар"
+                  className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                >
+                  <CalendarPlus size={13} />
+                </button>
+                <button
                   onClick={(e) => { e.stopPropagation(); setEditLead(lead); }}
                   className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
                 >
@@ -461,6 +575,9 @@ export default function LeadsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setCalendarLead(lead)} title="Додати в Google Календар" className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border)] transition-colors cursor-pointer">
+                      <CalendarPlus size={13} />
+                    </button>
                     <button onClick={() => setEditLead(lead)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer">
                       <Pencil size={13} />
                     </button>
@@ -518,6 +635,10 @@ export default function LeadsPage() {
 
       {openLead && (
         <LeadDrawer leadId={openLead} onClose={() => setOpenLead(null)} onUpdate={fetchLeads} />
+      )}
+
+      {calendarLead && (
+        <CalendarModal lead={calendarLead} onClose={() => setCalendarLead(null)} />
       )}
 
       {/* Delete confirmation */}
