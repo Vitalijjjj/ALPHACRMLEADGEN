@@ -44,7 +44,7 @@ function buildDailyData(
   const maxDay = isCurrentMonth ? today.getDate() : daysInMonth;
 
   const days: DailyLeadPoint[] = Array.from({ length: maxDay }, (_, i) => ({
-    day: String(i + 1),
+    day: format(new Date(year, month, i + 1), "dd.MM.yyyy"),
     total: 0,
     targeted: 0,
     lost: 0,
@@ -63,6 +63,35 @@ function buildDailyData(
   return days;
 }
 
+// One point per day across an arbitrary date range (used when date filters are set).
+function buildRangeData(
+  leads: { createdAt: Date; status: string }[],
+  start: Date,
+  end: Date
+): DailyLeadPoint[] {
+  const days: DailyLeadPoint[] = [];
+  const index = new Map<string, number>();
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor <= last && days.length < 366) {
+    const key = format(cursor, "dd.MM.yyyy");
+    index.set(key, days.length);
+    days.push({ day: key, total: 0, targeted: 0, lost: 0, won: 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  for (const lead of leads) {
+    const i = index.get(format(new Date(lead.createdAt), "dd.MM.yyyy"));
+    if (i === undefined) continue;
+    days[i].total++;
+    if (TARGETED_STATUSES.includes(lead.status)) days[i].targeted++;
+    if (LOSS_STATUSES_ALL.includes(lead.status)) days[i].lost++;
+    if (lead.status === "WON") days[i].won++;
+  }
+
+  return days;
+}
+
 const STATS_EMPTY = {
   totalLeads: 0, totalDeals: 0, totalTasks: 0, taskDone: 0, recentLeads: [] as never[],
   overdueTasks: 0, leadsByStatus: [] as never[], dealsByStatus: [] as never[],
@@ -71,6 +100,7 @@ const STATS_EMPTY = {
   todayLeadsBySource: [] as never[], currentMonthData: [] as never[], prevMonthData: [] as never[],
   targetedCurrentMonth: 0, targetedPrevMonth: 0, lastMonthLeads: 0,
   currentMonthLabel: "", prevMonthLabel: "",
+  rangeData: null as DailyLeadPoint[] | null, rangeLabel: null as string | null,
 };
 
 export interface OverviewFilterValues {
@@ -229,7 +259,23 @@ async function getStats(filters: OverviewFilterValues = {}) {
   const currentMonthLabel = `${MONTH_UA[now.getMonth()]} ${now.getFullYear()}`;
   const prevMonthLabel = `${MONTH_UA[prevMonth]} ${prevYear}`;
 
+  // Date filter set → the dynamics chart shows exactly that range instead of month tabs.
+  let rangeData: DailyLeadPoint[] | null = null;
+  let rangeLabel: string | null = null;
+  if (range) {
+    const rangeStart = range.gte ?? startOfMonth;
+    const rangeEnd = range.lte ?? now;
+    const rangeLeadsRaw = await db.lead.findMany({
+      where,
+      select: { createdAt: true, status: true },
+      orderBy: { createdAt: "asc" },
+    });
+    rangeData = buildRangeData(rangeLeadsRaw, rangeStart, rangeEnd);
+    rangeLabel = `${format(rangeStart, "dd.MM.yyyy")} – ${format(rangeEnd, "dd.MM.yyyy")}`;
+  }
+
   return {
+    rangeData, rangeLabel,
     totalLeads, totalDeals, totalTasks, taskDone, recentLeads,
     overdueTasks, leadsByStatus, dealsByStatus, conversion,
     leadsBySource, totalAmount, potentialAmount, wonLeads, lostLeads,
@@ -465,6 +511,8 @@ export default async function DashboardPage({
             prevData={stats.prevMonthData}
             currentLabel={stats.currentMonthLabel}
             prevLabel={stats.prevMonthLabel}
+            rangeData={stats.rangeData}
+            rangeLabel={stats.rangeLabel}
           />
         </div>
 

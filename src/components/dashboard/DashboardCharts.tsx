@@ -298,59 +298,75 @@ export function LeadDynamicsSection({
   prevData,
   currentLabel,
   prevLabel,
+  rangeData,
+  rangeLabel,
 }: {
   currentData: DailyLeadPoint[];
   prevData: DailyLeadPoint[];
   currentLabel: string;
   prevLabel: string;
+  rangeData?: DailyLeadPoint[] | null;
+  rangeLabel?: string | null;
 }) {
   const [tab, setTab] = useState<"current" | "prev">("current");
-  const data = tab === "current" ? currentData : prevData;
+  const isRange = !!rangeData;
+  const data = isRange ? rangeData! : tab === "current" ? currentData : prevData;
+  const label = isRange ? (rangeLabel ?? "") : tab === "current" ? currentLabel : prevLabel;
+
+  // Show every date tick and per-point counts only while they still fit.
+  const tickInterval = data.length <= 31 ? 0 : Math.ceil(data.length / 31) - 1;
+  const showPointLabels = data.length > 0 && data.length <= 40;
+  const pointLabel = (fill: string, position: "top" | "bottom") =>
+    showPointLabels ? { position, fontSize: 9, fill, offset: 7 } : false;
+  const dot = showPointLabels ? { r: 2, strokeWidth: 0 } : false;
 
   return (
     <div style={CARD} className="p-5">
       <div className="flex items-center justify-between mb-5">
         <div>
           <p className="text-sm font-semibold text-[var(--text)]">Динаміка лідів</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            {tab === "current" ? currentLabel : prevLabel}
-          </p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">{label}</p>
         </div>
-        <div
-          className="flex rounded-xl overflow-hidden"
-          style={{ border: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          {(["current", "prev"] as const).map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`text-xs px-3 py-1.5 transition-colors cursor-pointer${i > 0 ? " border-l border-[rgba(255,255,255,0.08)]" : ""}`}
-              style={{
-                background: tab === t ? "var(--accent)" : "transparent",
-                color: tab === t ? "#000" : "var(--text-muted)",
-                fontWeight: tab === t ? 600 : 400,
-              }}
-            >
-              {t === "current" ? "Поточний" : "Попередній"}
-            </button>
-          ))}
-        </div>
+        {!isRange && (
+          <div
+            className="flex rounded-xl overflow-hidden"
+            style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            {(["current", "prev"] as const).map((t, i) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`text-xs px-3 py-1.5 transition-colors cursor-pointer${i > 0 ? " border-l border-[rgba(255,255,255,0.08)]" : ""}`}
+                style={{
+                  background: tab === t ? "var(--accent)" : "transparent",
+                  color: tab === t ? "#000" : "var(--text-muted)",
+                  fontWeight: tab === t ? 600 : 400,
+                }}
+              >
+                {t === "current" ? "Поточний" : "Попередній"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {data.length === 0 ? (
         <div className="flex items-center justify-center h-52 text-[var(--text-muted)] text-sm">
-          Немає даних за цей місяць
+          {isRange ? "Немає даних за вибраний період" : "Немає даних за цей місяць"}
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={248}>
-          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+        <ResponsiveContainer width="100%" height={286}>
+          <LineChart data={data} margin={{ top: 14, right: 12, bottom: 0, left: -12 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
             <XAxis
               dataKey="day"
-              tick={{ fontSize: 9, fill: "#555" }}
+              tick={{ fontSize: 8.5, fill: "#666" }}
               axisLine={false}
               tickLine={false}
-              interval="preserveStartEnd"
+              interval={tickInterval}
+              angle={-45}
+              textAnchor="end"
+              height={56}
             />
             <YAxis
               allowDecimals={false}
@@ -366,19 +382,21 @@ export function LeadDynamicsSection({
             <Legend
               iconType="circle"
               iconSize={7}
-              wrapperStyle={{ fontSize: 11, paddingTop: 14 }}
+              wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
               formatter={(val: string) => (
                 <span style={{ color: "#888" }}>{val}</span>
               )}
             />
             <Line
               type="monotone" dataKey="total" name="Загальна"
-              stroke="#C98C0A" strokeWidth={2} dot={false}
+              stroke="#C98C0A" strokeWidth={2} dot={dot}
+              label={pointLabel("#C98C0A", "top")}
               activeDot={{ r: 3, strokeWidth: 0 }}
             />
             <Line
               type="monotone" dataKey="targeted" name="Цільовий"
-              stroke="#22c55e" strokeWidth={2} dot={false}
+              stroke="#22c55e" strokeWidth={2} dot={dot}
+              label={pointLabel("#22c55e", "bottom")}
               activeDot={{ r: 3, strokeWidth: 0 }}
             />
             <Line
