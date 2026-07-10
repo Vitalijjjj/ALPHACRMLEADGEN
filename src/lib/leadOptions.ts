@@ -66,6 +66,18 @@ export const LOSS_STATUSES = LEAD_STATUSES.filter((s) => s.group === "loss").map
 // Historical alias kept for older data.
 export const LOSS_STATUSES_ALL = [...LOSS_STATUSES, "LOST"];
 
+// Old status values that may still exist in the DB (pre-migration enum) → their current equivalent.
+export const LEGACY_STATUS_ALIASES: Record<string, string[]> = {
+  NEW_LEAD: ["NEW"],
+  PROPOSAL: ["NEGOTIATION"],
+  NOT_INTERESTED: ["LOST"],
+};
+
+// All DB values a status filter should match (current value + legacy aliases).
+export function statusMatchValues(status: string): string[] {
+  return [status, ...(LEGACY_STATUS_ALIASES[status] ?? [])];
+}
+
 // "Цільові" (qualified) leads — everything past first contact that is still in play or won.
 export const TARGETED_STATUSES = [
   "CONTACTED", "TARGETED", "SCHEDULED_PROPOSAL", "SET_PROPOSAL", "PROPOSAL",

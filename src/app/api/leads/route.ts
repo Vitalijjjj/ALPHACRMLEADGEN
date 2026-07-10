@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { statusMatchValues } from "@/lib/leadOptions";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -26,8 +27,8 @@ export async function GET(req: NextRequest) {
   try {
     const leads = await db.lead.findMany({
       where: {
-        ...(status ? { status } : {}),
-        ...(source ? { source } : {}),
+        ...(status ? { status: { in: statusMatchValues(status) } } : {}),
+        ...(source ? { source: { equals: source, mode: "insensitive" } } : {}),
         ...(campaign ? { sourceDetail: { contains: campaign, mode: "insensitive" } } : {}),
         ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
         ...(search

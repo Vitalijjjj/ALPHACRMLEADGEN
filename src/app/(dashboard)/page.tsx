@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import OverviewFilters from "@/components/dashboard/OverviewFilters";
-import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL } from "@/lib/leadOptions";
+import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL, statusMatchValues } from "@/lib/leadOptions";
 import {
   Users,
   Briefcase,
@@ -104,8 +104,8 @@ function buildLeadWhere(f: OverviewFilterValues): Prisma.LeadWhereInput {
   const where: Prisma.LeadWhereInput = {};
   const range = buildDateRange(f);
   if (range) where.createdAt = range;
-  if (f.status) where.status = f.status;
-  if (f.source) where.source = f.source;
+  if (f.status) where.status = { in: statusMatchValues(f.status) };
+  if (f.source) where.source = { equals: f.source, mode: "insensitive" };
   if (f.service) where.service = f.service;
   if (f.niche) where.niche = { contains: f.niche, mode: "insensitive" };
   if (f.geo) where.geo = { contains: f.geo, mode: "insensitive" };
