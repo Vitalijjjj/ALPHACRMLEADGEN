@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureSchema } from "@/lib/db";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -9,6 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   try {
+    await ensureSchema();
     const lead = await db.lead.findUnique({
       where: { id },
       include: {
@@ -40,6 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const body = await req.json();
 
+    await ensureSchema();
     const existing = await db.lead.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -70,6 +72,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body.remindAt         !== undefined) data.remindAt         = body.remindAt ? new Date(body.remindAt) : null;
     if (body.pushStage        !== undefined) data.pushStage        = body.pushStage || null;
     if (body.messenger        !== undefined) data.messenger        = body.messenger || null;
+    if (body.calendarAt       !== undefined) data.calendarAt       = body.calendarAt ? parseWarsawDate(body.calendarAt) : null;
+    if (body.calendarStatus   !== undefined) data.calendarStatus   = body.calendarStatus || null;
     if (body.createdAt        !== undefined) data.createdAt        = body.createdAt ? new Date(body.createdAt) : undefined;
 
     const lead = await db.lead.update({ where: { id }, data });

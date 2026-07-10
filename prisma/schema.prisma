@@ -38,6 +38,8 @@ model Lead {
   pushComment      String?
   pushStage        String?
   messenger        String?
+  calendarAt       DateTime?
+  calendarStatus   String?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 

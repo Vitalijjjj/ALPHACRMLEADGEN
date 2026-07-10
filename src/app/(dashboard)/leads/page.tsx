@@ -40,6 +40,8 @@ interface Lead {
   pushComment: string | null;
   messenger: string | null;
   sourceDetail: string | null;
+  calendarAt: string | null;
+  calendarStatus: string | null;
   createdAt: string;
   updatedAt: string;
   _count: { tasks: number; deals: number };
@@ -79,24 +81,54 @@ function buildGCalUrl(lead: Lead, dateStr: string, timeStr: string, status: stri
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-function CalendarModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+function CalendarModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () => void; onSaved: () => void }) {
   const now = new Date();
-  const [date, setDate] = useState(now.toISOString().slice(0, 10));
-  const [time, setTime] = useState(`${pad(now.getHours())}:00`);
-  const [status, setStatus] = useState(CALENDAR_STATUSES[0]);
+  const hasEvent = !!lead.calendarAt;
+  const savedLocal = lead.calendarAt ? toWarsawInput(lead.calendarAt) : null;
+  const [date, setDate] = useState(savedLocal ? savedLocal.slice(0, 10) : now.toISOString().slice(0, 10));
+  const [time, setTime] = useState(savedLocal ? savedLocal.slice(11, 16) : `${pad(now.getHours())}:00`);
+  const [status, setStatus] = useState(lead.calendarStatus ?? CALENDAR_STATUSES[0]);
+  const [saving, setSaving] = useState(false);
 
   const field = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors";
   const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide";
   const preview = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
 
-  function submit() {
-    const url = buildGCalUrl(lead, date, time, status);
-    window.open(url, "_blank", "noopener,noreferrer");
-    onClose();
+  async function submit(openCalendar: boolean) {
+    setSaving(true);
+    try {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarAt: `${date}T${time || "09:00"}`, calendarStatus: status }),
+      });
+      if (openCalendar) {
+        window.open(buildGCalUrl(lead, date, time, status), "_blank", "noopener,noreferrer");
+      }
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeEvent() {
+    setSaving(true);
+    try {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarAt: null, calendarStatus: null }),
+      });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Modal open onClose={onClose} title="Додати в Google Календар">
+    <Modal open onClose={onClose} title={hasEvent ? "Редагувати подію" : "Додати в Google Календар"}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -138,21 +170,66 @@ function CalendarModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
-            Скасувати
-          </button>
-          <button
-            onClick={submit}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg text-black transition-colors cursor-pointer"
-            style={{ background: "var(--accent)" }}
-          >
-            <CalendarPlus size={13} />
-            Додати в календар
-          </button>
+        {hasEvent && (
+          <p className="text-[11px] text-[var(--text-dim)] leading-snug">
+            Зміни збережуться в CRM. Стару подію в самому Google Календарі за потреби видаліть або
+            перенесіть там вручну — «+ Календар» створює нову подію.
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {hasEvent ? (
+            <button
+              onClick={removeEvent}
+              disabled={saving}
+              className="text-xs text-red-400/80 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Прибрати подію
+            </button>
+          ) : <span />}
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
+              Скасувати
+            </button>
+            <button
+              onClick={() => submit(false)}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer disabled:opacity-50"
+              style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text)" }}
+            >
+              Зберегти
+            </button>
+            <button
+              onClick={() => submit(true)}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-black transition-colors cursor-pointer disabled:opacity-50"
+              style={{ background: "var(--accent)" }}
+            >
+              <CalendarPlus size={13} />
+              Зберегти + Календар
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
+  );
+}
+
+// Small chip showing the scheduled calendar event on a lead row.
+function CalendarChip({ lead, onClick }: { lead: Lead; onClick: (e: React.MouseEvent) => void }) {
+  if (!lead.calendarAt) return null;
+  const d = toWarsawInput(lead.calendarAt);
+  const label = `${d.slice(8, 10)}.${d.slice(5, 7)} ${d.slice(11, 16)}`;
+  return (
+    <button
+      onClick={onClick}
+      title="Редагувати подію"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer hover:opacity-80 transition-opacity"
+      style={{ color: "#4285F4", borderColor: "rgba(66,133,244,0.35)", background: "rgba(66,133,244,0.10)" }}
+    >
+      <CalendarPlus size={9} />
+      {label}{lead.calendarStatus ? ` · ${lead.calendarStatus}` : ""}
+    </button>
   );
 }
 
@@ -492,6 +569,7 @@ export default function LeadsPage() {
               )}
               {lead.source && <span className="text-xs text-[var(--text-muted)]">{lead.source}</span>}
               {lead.messenger && <ChannelChip channel={lead.messenger} />}
+              <CalendarChip lead={lead} onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }} />
               {lead.amount ? (
                 <span className="text-xs font-semibold ml-auto" style={{ color: "var(--accent)" }}>
                   €{lead.amount.toLocaleString()}
@@ -559,7 +637,12 @@ export default function LeadsPage() {
                     {!lead.phone && !lead.email && <span className="text-xs text-[var(--text-dim)]">—</span>}
                   </div>
                 </td>
-                <td className="px-4 py-3"><Badge value={lead.status} /></td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge value={lead.status} />
+                    <CalendarChip lead={lead} onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }} />
+                  </div>
+                </td>
                 <td className="px-4 py-3">
                   <div className="text-xs text-[var(--text-muted)]">{lead.source ?? "—"}</div>
                   {lead.geo && <div className="text-xs text-[var(--text-dim)]">{lead.geo}</div>}
@@ -575,7 +658,12 @@ export default function LeadsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setCalendarLead(lead)} title="Додати в Google Календар" className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--border)] transition-colors cursor-pointer">
+                    <button
+                      onClick={() => setCalendarLead(lead)}
+                      title={lead.calendarAt ? "Редагувати подію" : "Додати в Google Календар"}
+                      className="p-1.5 rounded hover:bg-[var(--border)] transition-colors cursor-pointer"
+                      style={{ color: lead.calendarAt ? "#4285F4" : "var(--text-muted)" }}
+                    >
                       <CalendarPlus size={13} />
                     </button>
                     <button onClick={() => setEditLead(lead)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer">
@@ -638,7 +726,7 @@ export default function LeadsPage() {
       )}
 
       {calendarLead && (
-        <CalendarModal lead={calendarLead} onClose={() => setCalendarLead(null)} />
+        <CalendarModal lead={calendarLead} onClose={() => setCalendarLead(null)} onSaved={fetchLeads} />
       )}
 
       {/* Delete confirmation */}

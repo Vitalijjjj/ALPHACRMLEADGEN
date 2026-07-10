@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureSchema } from "@/lib/db";
 import { statusMatchValues } from "@/lib/leadOptions";
 
 export async function GET(req: NextRequest) {
@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    await ensureSchema();
     const leads = await db.lead.findMany({
       where: {
         ...(status ? { status: { in: statusMatchValues(status) } } : {}),
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest) {
   const cleanInstagram = instagram ? instagram.replace(/^@/, "").trim() : undefined;
   const cleanTelegram = telegram ? telegram.replace(/^@/, "").trim() : undefined;
 
+  await ensureSchema();
   const lead = await db.lead.create({
     data: {
       name,
