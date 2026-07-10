@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import { Plus, AtSign } from "lucide-react";
+import { Plus, AtSign, Search, Filter, X } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import LeadDrawer from "@/components/leads/LeadDrawer";
+import { LEAD_STATUSES, LEAD_STATUS_SHORT, LEAD_SOURCES } from "@/lib/leadOptions";
 
 interface Lead {
   id: string;
@@ -19,40 +20,26 @@ interface Lead {
 
 interface ColDef { id: string; label: string; accent: string }
 
-const ACTIVE_COLS: ColDef[] = [
-  { id: "NEW_LEAD",    label: "Новий лід",   accent: "#C98C0A" },
-  { id: "CONTACTED",    label: "Звʼязався",     accent: "#22d3ee" },
-  { id: "CALL_BACK",   label: "Передзвонити", accent: "#818cf8" },
-  { id: "MISSED_CALL", label: "Недозвон",     accent: "#f59e0b" },
-  { id: "TARGETED",    label: "Цільовий",    accent: "#22c55e" },
-  { id: "PROPOSAL",    label: "КП",          accent: "#a78bfa" },
-  { id: "INTERESTED",  label: "Цікаво",      accent: "#34d399" },
-  { id: "THINKING",    label: "Думає",       accent: "#60a5fa" },
-];
+// Kanban columns come straight from the shared status list — every active status is a column.
+const ACTIVE_COLS: ColDef[] = LEAD_STATUSES
+  .filter((s) => s.group === "active")
+  .map((s) => ({ id: s.value, label: LEAD_STATUS_SHORT[s.value] ?? s.label, accent: s.accent }));
 
 const WIN_COL:  ColDef = { id: "WON",  label: "Виграш",  accent: "#22c55e" };
 const LOSS_COL: ColDef = { id: "LOST", label: "Програш", accent: "#f87171" };
 
-const LOSS_REASONS = [
-  { id: "NOT_INTERESTED", label: "Не цікаво" },
-  { id: "COMPETITORS",    label: "Працюють з іншими" },
-  { id: "DUPLICATE",      label: "Дубль" },
-  { id: "UNREACHABLE",    label: "Не змогли звʼязатись" },
-  { id: "NOT_TARGET",     label: "не ЦА" },
-  { id: "TOO_EXPENSIVE",  label: "Дорого" },
-];
+const LOSS_REASONS = LEAD_STATUSES
+  .filter((s) => s.group === "loss")
+  .map((s) => ({ id: s.value, label: LEAD_STATUS_SHORT[s.value] ?? s.label }));
 
 const LOSS_IDS   = new Set(LOSS_REASONS.map((r) => r.id));
 const LOSS_LABEL = Object.fromEntries(LOSS_REASONS.map((r) => [r.id, r.label]));
 
-// Fold detailed statuses into the coarse board columns so no lead disappears.
-const PROPOSAL_STAGES = new Set(["SCHEDULED_PROPOSAL", "SET_PROPOSAL", "SEND_REPORT", "TOUCH_1", "TOUCH_2", "TOUCH_3"]);
+// backward compat: old status strings → current column ids
 function norm(s: string): string {
   if (s === "NEW") return "NEW_LEAD";
   if (s === "NEGOTIATION") return "PROPOSAL";
   if (s === "LOST") return "NOT_INTERESTED";
-  if (s === "WRITTEN") return "CONTACTED";
-  if (PROPOSAL_STAGES.has(s)) return "PROPOSAL";
   return s;
 }
 
@@ -166,13 +153,39 @@ export default function PipelinePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [openLead, setOpenLead] = useState<string | null>(null);
   const [pendingLoss, setPendingLoss] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   const fetchLeads = useCallback(async () => {
-    const res = await fetch("/api/leads");
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (sourceFilter) params.set("source", sourceFilter);
+    if (campaignFilter) params.set("campaign", campaignFilter);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    const res = await fetch(`/api/leads?${params}`);
+    if (!res.ok) return;
     setLeads(await res.json());
-  }, []);
+  }, [search, sourceFilter, campaignFilter, dateFrom, dateTo]);
 
-  useEffect(() => { fetchLeads(); }, [fetchLeads]);
+  useEffect(() => {
+    const t = setTimeout(fetchLeads, 300);
+    return () => clearTimeout(t);
+  }, [fetchLeads]);
+
+  const activeFilterCount =
+    (sourceFilter ? 1 : 0) + (campaignFilter ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+
+  function resetFilters() {
+    setSourceFilter("");
+    setCampaignFilter("");
+    setDateFrom("");
+    setDateTo("");
+  }
 
   async function onDragEnd(result: DropResult) {
     if (!result.destination) return;
@@ -221,26 +234,93 @@ export default function PipelinePage() {
 
   return (
     <div className="p-3 sm:p-4 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3 shrink-0">
+      <div className="flex items-center justify-between gap-2 mb-3 shrink-0 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold text-[var(--text)]">Pipeline</h1>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">{leads.length} лідів</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-black text-sm rounded-lg transition-colors cursor-pointer"
-        >
-          <Plus size={14} />
-          Новий лід
-        </button>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Пошук..."
+              className="w-40 sm:w-52 pl-7 pr-2.5 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors"
+            />
+          </div>
+
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer"
+            style={showFilters || activeFilterCount > 0
+              ? { background: "var(--accent-subtle)", borderColor: "var(--accent)", color: "var(--accent)" }
+              : { background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+          >
+            <Filter size={13} />
+            Фільтри
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-black" style={{ background: "var(--accent)" }}>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-black text-sm rounded-lg transition-colors cursor-pointer"
+          >
+            <Plus size={14} />
+            Новий лід
+          </button>
+        </div>
       </div>
+
+      {showFilters && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 mb-3 shrink-0">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата від</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата до</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Джерело</label>
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
+                <option value="">Всі джерела</option>
+                {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Назва кампанії</label>
+              <input type="text" value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} placeholder="Пошук по кампанії..."
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]" />
+            </div>
+          </div>
+          {activeFilterCount > 0 && (
+            <div className="flex justify-end mt-2.5">
+              <button onClick={resetFilters}
+                className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
+                <X size={12} /> Скинути фільтри
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <DragDropContext onDragEnd={onDragEnd}>
         {/* Outer: scrolls horizontally on mobile, fills height on desktop */}
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-3 min-h-full h-full" style={{ minWidth: 900 }}>
-            {/* Active columns: 4-col grid on desktop, inline-flex on mobile */}
-            <div className="grid grid-cols-4 grid-rows-2 gap-2 flex-1 min-h-0" style={{ minWidth: 680 }}>
+          <div className="flex gap-3 min-h-full h-full" style={{ minWidth: 1180 }}>
+            {/* Active columns: 5×3 grid on desktop, horizontal scroll on mobile */}
+            <div className="grid grid-cols-5 grid-rows-3 gap-2 flex-1 min-h-0" style={{ minWidth: 960 }}>
               {ACTIVE_COLS.map((col) => (
                 <KanbanColumn
                   key={col.id}
