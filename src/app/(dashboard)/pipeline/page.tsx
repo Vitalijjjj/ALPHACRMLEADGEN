@@ -82,13 +82,13 @@ function KanbanColumn({
                 ? `${col.accent}0D`
                 : isWin  ? "rgba(34,197,94,0.04)"
                 : isLoss ? "rgba(248,113,113,0.04)"
+                : items.length === 0 ? "transparent"
                 : "var(--surface)",
-              border: `1px solid ${
-                snapshot.isDraggingOver ? `${col.accent}35`
-                : isWin  ? "rgba(34,197,94,0.18)"
-                : isLoss ? "rgba(248,113,113,0.18)"
-                : "var(--border)"
-              }`,
+              border: snapshot.isDraggingOver ? `1px solid ${col.accent}35`
+                : isWin  ? "1px solid rgba(34,197,94,0.18)"
+                : isLoss ? "1px solid rgba(248,113,113,0.18)"
+                : items.length === 0 ? "1px dashed var(--border)"
+                : "1px solid var(--border)",
             }}
           >
             {items.map((lead, index) => (
@@ -316,30 +316,34 @@ export default function PipelinePage() {
       )}
 
       <DragDropContext onDragEnd={onDragEnd}>
-        {/* Outer: scrolls horizontally on mobile, fills height on desktop */}
+        {/* Classic funnel: one full-height row per status, horizontal scroll; Win/Loss pinned right */}
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-3 min-h-full h-full" style={{ minWidth: 1180 }}>
-            {/* Active columns: 4×4 grid on desktop, horizontal scroll on mobile */}
-            <div className="grid grid-cols-4 grid-rows-4 gap-2 flex-1 min-h-0" style={{ minWidth: 960 }}>
-              {ACTIVE_COLS.map((col) => (
+          <div className="flex gap-2 h-full min-h-full w-max pr-1">
+            {ACTIVE_COLS.map((col) => (
+              <div key={col.id} className="w-56 shrink-0 h-full min-h-0">
                 <KanbanColumn
-                  key={col.id}
                   col={col}
                   items={filterCol(leads, col.id)}
                   onOpen={setOpenLead}
                 />
-              ))}
-            </div>
-
-            <div className="w-px bg-[var(--border)] opacity-40 shrink-0" />
-
-            {/* Win / Loss */}
-            <div className="flex flex-col gap-2 w-44 shrink-0 min-h-0">
-              <div className="flex-1 min-h-0">
-                <KanbanColumn col={WIN_COL} items={filterCol(leads, "WON")} onOpen={setOpenLead} isWin />
               </div>
-              <div className="flex-1 min-h-0">
-                <KanbanColumn col={LOSS_COL} items={filterCol(leads, "LOST")} onOpen={setOpenLead} isLoss />
+            ))}
+
+            {/* Win / Loss — sticky so they stay visible while scrolling the funnel */}
+            <div
+              className="sticky right-0 z-10 h-full min-h-0 flex gap-2 pl-3 shrink-0"
+              style={{
+                background: "linear-gradient(90deg, transparent 0, rgba(6,6,6,0.97) 14px)",
+                borderLeft: "1px solid var(--border)",
+              }}
+            >
+              <div className="flex flex-col gap-2 w-52 shrink-0 min-h-0 h-full">
+                <div className="flex-1 min-h-0">
+                  <KanbanColumn col={WIN_COL} items={filterCol(leads, "WON")} onOpen={setOpenLead} isWin />
+                </div>
+                <div className="flex-1 min-h-0">
+                  <KanbanColumn col={LOSS_COL} items={filterCol(leads, "LOST")} onOpen={setOpenLead} isLoss />
+                </div>
               </div>
             </div>
           </div>
