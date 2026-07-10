@@ -22,6 +22,7 @@ export const LEAD_STATUSES: LeadStatusDef[] = [
   { value: "SCHEDULED_PROPOSAL", label: "Назначив КП",       accent: "#fb923c", badge: "bg-orange-500/15 text-orange-400 border-orange-500/20",    group: "active" },
   { value: "SET_PROPOSAL",       label: "Поставити КП",      accent: "#c084fc", badge: "bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/20", group: "active" },
   { value: "PROPOSAL",           label: "КП",                accent: "#a78bfa", badge: "bg-violet-500/15 text-violet-400 border-violet-500/20",    group: "active" },
+  { value: "INVOICE",            label: "Інвойс",            accent: "#eab308", badge: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",    group: "active" },
   { value: "SEND_REPORT",        label: "Відправити звіт",   accent: "#0ea5e9", badge: "bg-sky-500/15 text-sky-400 border-sky-500/20",             group: "active" },
   { value: "TOUCH_1",            label: "Перший дотик",      accent: "#2dd4bf", badge: "bg-teal-500/15 text-teal-400 border-teal-500/20",          group: "active" },
   { value: "TOUCH_2",            label: "Другий дотик",      accent: "#14b8a6", badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20", group: "active" },
@@ -80,7 +81,7 @@ export function statusMatchValues(status: string): string[] {
 
 // "Цільові" (qualified) leads — everything past first contact that is still in play or won.
 export const TARGETED_STATUSES = [
-  "CONTACTED", "TARGETED", "SCHEDULED_PROPOSAL", "SET_PROPOSAL", "PROPOSAL",
+  "CONTACTED", "TARGETED", "SCHEDULED_PROPOSAL", "SET_PROPOSAL", "PROPOSAL", "INVOICE",
   "SEND_REPORT", "TOUCH_1", "TOUCH_2", "TOUCH_3",
   "INTERESTED", "THINKING", "CLOSE", "WON", "NEGOTIATION",
 ];

@@ -319,8 +319,8 @@ export default function PipelinePage() {
         {/* Outer: scrolls horizontally on mobile, fills height on desktop */}
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
           <div className="flex gap-3 min-h-full h-full" style={{ minWidth: 1180 }}>
-            {/* Active columns: 5×3 grid on desktop, horizontal scroll on mobile */}
-            <div className="grid grid-cols-5 grid-rows-3 gap-2 flex-1 min-h-0" style={{ minWidth: 960 }}>
+            {/* Active columns: 4×4 grid on desktop, horizontal scroll on mobile */}
+            <div className="grid grid-cols-4 grid-rows-4 gap-2 flex-1 min-h-0" style={{ minWidth: 960 }}>
               {ACTIVE_COLS.map((col) => (
                 <KanbanColumn
                   key={col.id}

@@ -123,6 +123,15 @@ enum ActivityType {
   DEAL_CREATED
 }
 
+model PushTemplate {
+  id        String   @id @default(cuid())
+  title     String?
+  text      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Campaign {
   id         String              @id @default(cuid())
   name       String
