@@ -55,7 +55,7 @@ const STATUS_OPTIONS = [
 ];
 
 // Quick-add a lead to Google Calendar: pick date/time + event status label.
-const CALENDAR_STATUSES = ["НДЗ", "Перезвон", "Поставити КП", "КП"];
+const CALENDAR_STATUSES = ["НДЗ", "Перезвон", "Поставити КП", "КП", "Пуш"];
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
