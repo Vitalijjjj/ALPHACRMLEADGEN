@@ -264,10 +264,11 @@ async function getStats(filters: OverviewFilterValues = {}) {
     db.lead.count({ where: mergeND(prevPeriodRange) }),
     db.lead.aggregate({ _sum: { amount: true }, where: mergeND({ ...curPeriodRange, status: "WON" }) }),
     db.deal.aggregate({ _sum: { budget: true }, where: { status: { not: "COMPLETED" }, ...dateWhere } }),
+    // «Ліди сьогодні»: з фільтром дат — джерела за обраний період, без — за сьогодні
     db.lead.groupBy({
       by: ["source"],
       _count: { source: true },
-      where: merge({ createdAt: { gte: startOfDay } }),
+      where: isCustomPeriod ? mergeND(curPeriodRange) : merge({ createdAt: { gte: startOfDay } }),
       orderBy: { _count: { source: "desc" } },
     }),
     db.lead.findMany({
@@ -595,8 +596,12 @@ export default async function DashboardPage({
         <div style={CARD} className="p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-semibold text-[var(--text)]">Ліди сьогодні</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">За джерелами трафіку</p>
+              <p className="text-sm font-semibold text-[var(--text)]">
+                {stats.isCustomPeriod ? "Ліди за період" : "Ліди сьогодні"}
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                За джерелами трафіку{stats.isCustomPeriod ? ` · ${stats.currentPeriodSub}` : ""}
+              </p>
             </div>
             {todayTotal > 0 && (
               <span
@@ -610,7 +615,9 @@ export default async function DashboardPage({
 
           {stats.todayLeadsBySource.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2">
-              <p className="text-sm text-[var(--text-muted)]">Сьогодні ще немає лідів</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {stats.isCustomPeriod ? "За період немає лідів" : "Сьогодні ще немає лідів"}
+              </p>
               <Link
                 href="/leads"
                 className="text-xs font-medium transition-opacity hover:opacity-80"

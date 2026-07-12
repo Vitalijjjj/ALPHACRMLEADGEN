@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Filter, X } from "lucide-react";
 import { LEAD_STATUSES, LEAD_SOURCES, LEAD_SERVICES } from "@/lib/leadOptions";
 import { useAdCampaigns } from "@/lib/useAdCampaigns";
@@ -16,50 +16,44 @@ const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-1 upperca
 const toLocalISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-const DATE_PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
-  {
-    label: "Весь час",
-    range: () => ({ from: "2020-01-01", to: toLocalISO(new Date()) }),
-  },
-  {
-    label: "Рік",
-    range: () => {
-      const now = new Date();
-      const from = new Date(now); from.setFullYear(now.getFullYear() - 1); from.setDate(from.getDate() + 1);
-      return { from: toLocalISO(from), to: toLocalISO(now) };
+interface LeadBounds { first: string | null; last: string | null }
+
+// «Весь час» — від першого до останнього ліда в базі (bounds), поки не завантажені — широкий діапазон.
+function buildDatePresets(bounds: LeadBounds | null): { label: string; from: string; to: string }[] {
+  const now = new Date();
+  const today = toLocalISO(now);
+  const shift = (fn: (d: Date) => void) => { const d = new Date(now); fn(d); return toLocalISO(d); };
+  return [
+    {
+      label: "Весь час",
+      from: bounds?.first ? toLocalISO(new Date(bounds.first)) : "2020-01-01",
+      to: bounds?.last ? toLocalISO(new Date(bounds.last)) : today,
     },
-  },
-  {
-    label: "Квартал",
-    range: () => {
-      const now = new Date();
-      const from = new Date(now); from.setMonth(now.getMonth() - 3); from.setDate(from.getDate() + 1);
-      return { from: toLocalISO(from), to: toLocalISO(now) };
-    },
-  },
-  {
-    label: "7 днів",
-    range: () => {
-      const now = new Date();
-      const from = new Date(now); from.setDate(now.getDate() - 6);
-      return { from: toLocalISO(from), to: toLocalISO(now) };
-    },
-  },
-  {
-    label: "2 дні",
-    range: () => {
-      const now = new Date();
-      const from = new Date(now); from.setDate(now.getDate() - 1);
-      return { from: toLocalISO(from), to: toLocalISO(now) };
-    },
-  },
-];
+    { label: "Рік",       from: shift((d) => { d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 1); }), to: today },
+    { label: "Квартал",   from: shift((d) => { d.setMonth(d.getMonth() - 3); d.setDate(d.getDate() + 1); }),       to: today },
+    { label: "Цей місяць", from: toLocalISO(new Date(now.getFullYear(), now.getMonth(), 1)),                        to: today },
+    { label: "7 днів",    from: shift((d) => d.setDate(d.getDate() - 6)),                                           to: today },
+    { label: "2 дні",     from: shift((d) => d.setDate(d.getDate() - 1)),                                           to: today },
+  ];
+}
 
 export default function OverviewFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   const { campaigns } = useAdCampaigns();
+  const [bounds, setBounds] = useState<LeadBounds | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/leads/bounds")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((b) => { if (!cancelled && b) setBounds(b); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const presets = buildDatePresets(bounds);
 
   const get = (k: FilterKey) => sp.get(k) ?? "";
   const activeCount = FILTER_KEYS.reduce((n, k) => n + (sp.get(k) ? 1 : 0), 0);
@@ -108,13 +102,12 @@ export default function OverviewFilters() {
 
       {/* Швидкі періоди */}
       <div className="flex flex-wrap items-center gap-1.5 mb-3">
-        {DATE_PRESETS.map((p) => {
-          const r = p.range();
-          const active = get("dateFrom") === r.from && get("dateTo") === r.to;
+        {presets.map((p) => {
+          const active = get("dateFrom") === p.from && get("dateTo") === p.to;
           return (
             <button
               key={p.label}
-              onClick={() => applyPreset(r.from, r.to)}
+              onClick={() => applyPreset(p.from, p.to)}
               className="px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer"
               style={active
                 ? { background: "var(--accent-subtle, rgba(201,140,10,0.12))", borderColor: "var(--accent)", color: "var(--accent)" }

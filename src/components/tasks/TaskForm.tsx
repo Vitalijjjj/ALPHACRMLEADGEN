@@ -7,13 +7,30 @@ interface TaskFormProps {
   onCancel: () => void;
 }
 
+// Швидкі шаблони назви задачі
+const TASK_TEMPLATES = [
+  "Пушнути шо рішив",
+  "Перезвонити",
+  "Поставити КП",
+  "Провести КП",
+  "Дати звіт",
+];
+
+// Понеділок наступного тижня (yyyy-MM-dd) — дефолтний дедлайн
+function nextMonday(): string {
+  const d = new Date();
+  const shift = ((8 - d.getDay()) % 7) || 7;
+  d.setDate(d.getDate() + shift);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function TaskForm({ onSave, onCancel }: TaskFormProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [deadline, setDeadline] = useState(nextMonday());
   const [remindAt, setRemindAt] = useState("");
-  const [priority, setPriority] = useState("MEDIUM");
-  const [assignee, setAssignee] = useState("");
+  const [priority, setPriority] = useState("HIGH");
+  const [assignee, setAssignee] = useState("Артур");
   const [saving, setSaving] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -35,6 +52,25 @@ export function TaskForm({ onSave, onCancel }: TaskFormProps) {
           className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
           placeholder="Назва задачі"
         />
+        {/* Шаблони назв */}
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {TASK_TEMPLATES.map((t) => {
+            const active = title === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTitle(t)}
+                className="px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer"
+                style={active
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#000", fontWeight: 600 }
+                  : { background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+              >
+                {t}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="space-y-1">
         <label className="text-xs text-[var(--text-muted)]">Опис</label>
