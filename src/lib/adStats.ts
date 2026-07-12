@@ -183,8 +183,8 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
           isFallback: false,
           budgetLabel:
             type === "Автопрозвон"
-              ? c.totalBudget != null ? `€${c.totalBudget.toLocaleString("en-US", { maximumFractionDigits: 0 })} всього` : "—"
-              : c.dailyBudget != null ? `€${c.dailyBudget.toLocaleString("en-US", { maximumFractionDigits: 0 })}/день` : "—",
+              ? c.totalBudget != null ? `$${c.totalBudget.toLocaleString("en-US", { maximumFractionDigits: 0 })} всього` : "—"
+              : c.dailyBudget != null ? `$${c.dailyBudget.toLocaleString("en-US", { maximumFractionDigits: 0 })}/день` : "—",
           spent,
           ...counts,
           costPerLead: priceOf(spent, counts.leads),

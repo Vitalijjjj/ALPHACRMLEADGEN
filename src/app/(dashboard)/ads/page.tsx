@@ -48,7 +48,7 @@ function fmtDate(v: string | null): string {
 }
 
 function fmtMoney(v: number | null): string {
-  return v != null ? `€${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "—";
+  return v != null ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "—";
 }
 
 // Поля драфта, що відрізняються за типом трафіку:
@@ -78,7 +78,7 @@ function DraftFields({
         </select>
       </div>
       <div>
-        <label className={lbl}>{isAutocall ? "Бюджет кампанії (€)" : "Денний бюджет (€)"}</label>
+        <label className={lbl}>{isAutocall ? "Бюджет кампанії ($)" : "Денний бюджет ($)"}</label>
         <input
           type="number" min="0" step="0.01"
           value={isAutocall ? draft.totalBudget : draft.dailyBudget}
@@ -189,8 +189,14 @@ export default function AdsPage() {
     });
   }
 
+  // Вимкнуті кампанії — в кінці списку (не в пріоритеті)
   const grouped = AD_TRAFFIC_TYPES
-    .map((type) => ({ type, items: campaigns.filter((c) => c.trafficType === type) }))
+    .map((type) => ({
+      type,
+      items: campaigns
+        .filter((c) => c.trafficType === type)
+        .sort((a, b) => Number(b.active) - Number(a.active)),
+    }))
     .filter((g) => g.items.length > 0);
 
   return (

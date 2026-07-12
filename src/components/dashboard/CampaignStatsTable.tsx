@@ -6,7 +6,7 @@ import { CARD } from "@/components/dashboard/DashboardCharts";
 
 function money(v: number | null, digits = 2): string {
   if (v == null) return "—";
-  return `€${v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: digits })}`;
+  return `$${v.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: digits })}`;
 }
 
 const num = "px-3 py-2.5 text-right tabular-nums";
