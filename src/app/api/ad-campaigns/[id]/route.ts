@@ -41,6 +41,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   try {
     await ensureSchema();
+    const campaign = await db.adCampaign.findUnique({ where: { id } });
+    if (!campaign) return NextResponse.json({ ok: true });
+
+    // Відв'язуємо кампанію від лідів (sourceDetail → null), інакше автосинк
+    // одразу створить її заново з тих самих лідів.
+    await db.lead.updateMany({
+      where: {
+        source: { equals: campaign.trafficType, mode: "insensitive" },
+        sourceDetail: { equals: campaign.name.trim(), mode: "insensitive" },
+      },
+      data: { sourceDetail: null },
+    });
     await db.adCampaign.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

@@ -172,7 +172,7 @@ export default function AdsPage() {
   }
 
   async function remove(c: AdCampaign) {
-    if (!confirm(`Видалити кампанію «${c.name}»? Ліди залишаться без змін.`)) return;
+    if (!confirm(`Видалити кампанію «${c.name}»? Ліди залишаться, але будуть без вказаної кампанії.`)) return;
     setCampaigns((list) => list.filter((x) => x.id !== c.id));
     await fetch(`/api/ad-campaigns/${c.id}`, { method: "DELETE" });
   }
