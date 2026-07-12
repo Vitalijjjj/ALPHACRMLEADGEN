@@ -60,6 +60,7 @@ export interface CampaignStatRow {
 
 export interface TrafficTypeGroup {
   type: string;
+  hasBudget: boolean; // рекламні типи мають бюджет/витрати; інші джерела — лише лічильники
   rows: CampaignStatRow[];
   totals: Omit<CampaignStatRow, "key" | "name" | "trafficType" | "active" | "isFallback" | "budgetLabel">;
 }
@@ -133,10 +134,7 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
     const [campaigns, leads] = await Promise.all([
       db.adCampaign.findMany({ orderBy: { createdAt: "asc" } }),
       db.lead.findMany({
-        where: {
-          source: { in: [...AD_TRAFFIC_TYPES], mode: "insensitive" },
-          createdAt: { gte: periodStart, lte: periodEnd },
-        },
+        where: { createdAt: { gte: periodStart, lte: periodEnd } },
         select: {
           source: true,
           sourceDetail: true,
@@ -158,13 +156,17 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
       counters.set(key, c);
     };
 
+    // Рекламні ліди рахуються по кампаніях; решта джерел — сумарно по джерелу (key = "src|назва")
     const campaignKeys = new Set(campaigns.map((c) => `${c.trafficType.toLowerCase()}|${c.name.trim().toLowerCase()}`));
     for (const lead of leads) {
       const type = normalizeTrafficType(lead.source);
-      if (!type) continue;
-      const name = lead.sourceDetail?.trim().toLowerCase() ?? "";
-      const key = `${type.toLowerCase()}|${name}`;
-      bump(campaignKeys.has(key) ? key : `${type.toLowerCase()}|`, lead);
+      if (type) {
+        const name = lead.sourceDetail?.trim().toLowerCase() ?? "";
+        const key = `${type.toLowerCase()}|${name}`;
+        bump(campaignKeys.has(key) ? key : `${type.toLowerCase()}|`, lead);
+      } else {
+        bump(`src|${lead.source?.trim() || "Не вказано"}`, lead);
+      }
     }
 
     const groups: TrafficTypeGroup[] = [];
@@ -225,6 +227,7 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
       );
       groups.push({
         type,
+        hasBudget: true,
         rows,
         totals: {
           ...sum,
@@ -234,6 +237,18 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
         },
       });
     }
+
+    // Інші джерела (без кампаній і бюджетів) — одним рядком-групою на джерело
+    const otherGroups: TrafficTypeGroup[] = [...counters.entries()]
+      .filter(([key, c]) => key.startsWith("src|") && c.leads > 0)
+      .map(([key, c]) => ({
+        type: key.slice(4),
+        hasBudget: false,
+        rows: [],
+        totals: { ...c, spent: 0, costPerLead: null, costPerProposal: null, costPerSale: null },
+      }))
+      .sort((a, b) => b.totals.leads - a.totals.leads);
+    groups.push(...otherGroups);
 
     return { groups, periodLabel };
   } catch (e) {

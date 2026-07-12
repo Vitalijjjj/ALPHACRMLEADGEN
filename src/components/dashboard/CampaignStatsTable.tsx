@@ -11,17 +11,17 @@ function money(v: number | null, digits = 2): string {
 
 const num = "px-3 py-2.5 text-right tabular-nums";
 
-function Cells({ r, muted }: { r: Pick<CampaignStatRow, "leads" | "targeted" | "proposals" | "won" | "spent" | "costPerLead" | "costPerProposal" | "costPerSale">; muted?: boolean }) {
+function Cells({ r, noBudget }: { r: Pick<CampaignStatRow, "leads" | "targeted" | "proposals" | "won" | "spent" | "costPerLead" | "costPerProposal" | "costPerSale">; noBudget?: boolean }) {
   return (
     <>
-      <td className={`${num} font-semibold`} style={{ color: muted ? "var(--text)" : "var(--text)" }}>{r.leads}</td>
+      <td className={`${num} font-semibold text-[var(--text)]`}>{r.leads}</td>
       <td className={num} style={{ color: "#22c55e" }}>{r.targeted}</td>
       <td className={num} style={{ color: "#a78bfa" }}>{r.proposals}</td>
       <td className={num} style={{ color: "#22d3ee" }}>{r.won}</td>
-      <td className={num} style={{ color: "var(--accent)" }}>{money(r.spent, 0)}</td>
-      <td className={`${num} text-[var(--text-muted)]`}>{money(r.costPerLead)}</td>
-      <td className={`${num} text-[var(--text-muted)]`}>{money(r.costPerProposal)}</td>
-      <td className={`${num} text-[var(--text-muted)]`}>{money(r.costPerSale)}</td>
+      <td className={num} style={{ color: noBudget ? "var(--text-dim)" : "var(--accent)" }}>{noBudget ? "—" : money(r.spent, 0)}</td>
+      <td className={`${num} text-[var(--text-muted)]`}>{noBudget ? "—" : money(r.costPerLead)}</td>
+      <td className={`${num} text-[var(--text-muted)]`}>{noBudget ? "—" : money(r.costPerProposal)}</td>
+      <td className={`${num} text-[var(--text-muted)]`}>{noBudget ? "—" : money(r.costPerSale)}</td>
       <td className={`${num} text-[var(--text-muted)]`}>
         {r.leads > 0 ? `${Math.round((r.won / r.leads) * 100)}%` : "—"}
       </td>
@@ -37,7 +37,7 @@ export default function CampaignStatsTable({ stats }: { stats: CampaignStatsResu
         style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
       >
         <div>
-          <p className="text-sm font-semibold text-[var(--text)]">Рекламні кампанії</p>
+          <p className="text-sm font-semibold text-[var(--text)]">Кампанії та джерела</p>
           <p className="text-xs text-[var(--text-muted)]">
             Ліди та витрати за період {stats.periodLabel}
           </p>
@@ -54,7 +54,7 @@ export default function CampaignStatsTable({ stats }: { stats: CampaignStatsResu
       {stats.groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 gap-2">
           <Megaphone size={18} className="text-[var(--text-dim)]" />
-          <p className="text-sm text-[var(--text-muted)]">За цей період немає лідів з рекламних кампаній</p>
+          <p className="text-sm text-[var(--text-muted)]">За цей період немає лідів</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -75,7 +75,7 @@ export default function CampaignStatsTable({ stats }: { stats: CampaignStatsResu
             </thead>
             <tbody>
               {stats.groups.map((g) => {
-                const accent = AD_TRAFFIC_ACCENT[g.type] ?? "#C98C0A";
+                const accent = AD_TRAFFIC_ACCENT[g.type] ?? (g.hasBudget ? "#C98C0A" : "#a1a1aa");
                 return [
                   /* ── Група: тип трафіку з підсумком ── */
                   <tr key={g.type} style={{ background: `${accent}0a`, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
@@ -87,7 +87,7 @@ export default function CampaignStatsTable({ stats }: { stats: CampaignStatsResu
                         {g.type}
                       </span>
                     </td>
-                    <Cells r={g.totals} />
+                    <Cells r={g.totals} noBudget={!g.hasBudget} />
                   </tr>,
                   /* ── Кампанії всередині типу ── */
                   ...g.rows.map((r) => (

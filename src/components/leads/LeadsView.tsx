@@ -64,7 +64,7 @@ function pad(n: number) {
 function buildGCalUrl(lead: Lead, dateStr: string, timeStr: string, status: string): string {
   // Floating local time — Google Calendar interprets it in the account's timezone.
   const start = new Date(`${dateStr}T${timeStr || "09:00"}`);
-  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  const end = start; // тривалість події за замовчуванням 0 хв
   const fmt = (d: Date) =>
     `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
   const title = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");

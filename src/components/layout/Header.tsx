@@ -52,7 +52,7 @@ export default function Header() {
         padding: "12px 16px",
         flexShrink: 0,
         position: "relative",
-        zIndex: 10,
+        zIndex: 40, // вище за контентні картки (z-10), щоб дропдаун пошуку не ховався під ними
         background: "rgba(6, 6, 6, 0.88)",
         backdropFilter: "blur(24px) saturate(160%)",
         WebkitBackdropFilter: "blur(24px) saturate(160%)",
