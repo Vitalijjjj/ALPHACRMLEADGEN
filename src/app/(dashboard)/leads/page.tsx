@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, Phone, Mail, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp, Filter, X, CalendarPlus } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
@@ -282,7 +283,9 @@ function TelegramLink({ username }: { username: string }) {
   );
 }
 
-export default function LeadsPage() {
+function LeadsPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
   const { campaigns: adCampaigns } = useAdCampaigns();
   const [search, setSearch] = useState("");
@@ -333,6 +336,16 @@ export default function LeadsPage() {
     const t = setTimeout(() => fetchLeads().finally(() => setSearching(false)), 400);
     return () => clearTimeout(t);
   }, [fetchLeads]);
+
+  // Глобальний пошук з хедера: /leads?q=... підставляє пошук, /leads?open=<id> відкриває ліда.
+  // Параметри одразу знімаються з URL, щоб повторний перехід спрацював знову.
+  useEffect(() => {
+    const q = searchParams.get("q");
+    const open = searchParams.get("open");
+    if (q) setSearch(q);
+    if (open) setOpenLead(open);
+    if (q || open) router.replace("/leads", { scroll: false });
+  }, [searchParams, router]);
 
   async function createLead(data: LeadFormData) {
     const res = await fetch("/api/leads", {
@@ -758,5 +771,14 @@ export default function LeadsPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+// useSearchParams вимагає Suspense-межу на статично згенерованій сторінці
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={null}>
+      <LeadsPageInner />
+    </Suspense>
   );
 }

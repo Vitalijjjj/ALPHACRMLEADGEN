@@ -11,7 +11,6 @@ import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUS_BADGE, LEAD_STATUS_BA
 import {
   Users,
   Briefcase,
-  CheckSquare,
   TrendingUp,
   ArrowUpRight,
   Target,
@@ -20,7 +19,6 @@ import {
 } from "lucide-react";
 import {
   LeadDonutChart,
-  TaskProgressRing,
   DealBarChart,
   MiniLineChart,
   LeadDynamicsSection,
@@ -387,7 +385,6 @@ export default async function DashboardPage({
     getStatsSafe(filters),
     getCampaignStats(filters.dateFrom, filters.dateTo),
   ]);
-  const taskTotal = stats.taskDone + stats.totalTasks;
   const todayTotal = stats.todayLeadsBySource.reduce((s, l) => s + l._count.source, 0);
 
   // ── KPI cards ──
@@ -459,7 +456,6 @@ export default async function DashboardPage({
   const sparklines = [
     [2, 4, 3, 6, 5, 8, stats.totalLeads],
     [1, 3, 2, 4, 3, 5, stats.totalDeals],
-    [3, 2, 4, 3, 5, 4, stats.totalTasks],
     [10, 20, 15, 30, 25, 40, stats.conversion],
   ];
 
@@ -487,15 +483,6 @@ export default async function DashboardPage({
         stats.activePipeline > 0
           ? `€${stats.activePipeline.toLocaleString("en-US", { maximumFractionDigits: 0 })} pipeline`
           : "Немає активних",
-    },
-    {
-      label: "Задачі",
-      value: stats.totalTasks,
-      icon: CheckSquare,
-      href: "/tasks",
-      color: "#a78bfa",
-      glow: "rgba(167,139,250,0.35)",
-      trend: stats.overdueTasks > 0 ? `${stats.overdueTasks} прострочено` : "Все вчасно",
     },
     {
       label: "Конверсія",
@@ -769,7 +756,7 @@ export default async function DashboardPage({
       </div>
 
       {/* ── Secondary stat cards ── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
         {secondaryCards.map((c, i) => {
           const Icon = c.icon;
           return (
@@ -809,7 +796,7 @@ export default async function DashboardPage({
       </div>
 
       {/* ── Charts row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div style={CARD} className="p-5">
           <p className="text-sm font-semibold text-[var(--text)] mb-0.5">Статуси лідів</p>
           <p className="text-xs text-[var(--text-muted)] mb-5">Розподіл за статусом</p>
@@ -819,13 +806,6 @@ export default async function DashboardPage({
           <p className="text-sm font-semibold text-[var(--text)] mb-0.5">Pipeline угод</p>
           <p className="text-xs text-[var(--text-muted)] mb-4">По стадіях</p>
           <DealBarChart data={stats.dealsByStatus} />
-        </div>
-        <div style={CARD} className="p-5 flex flex-col">
-          <p className="text-sm font-semibold text-[var(--text)] mb-0.5">Задачі</p>
-          <p className="text-xs text-[var(--text-muted)] mb-4">Прогрес виконання</p>
-          <div className="flex-1 flex items-center justify-center">
-            <TaskProgressRing done={stats.taskDone} total={taskTotal} />
-          </div>
         </div>
       </div>
 

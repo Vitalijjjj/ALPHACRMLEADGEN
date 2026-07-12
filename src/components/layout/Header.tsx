@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Search, Bell, Menu } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/lib/useMobileMenu";
+import HeaderSearch from "@/components/layout/HeaderSearch";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -18,7 +19,6 @@ const pageTitles: Record<string, string> = {
 
 export default function Header() {
   const path = usePathname();
-  const [search, setSearch] = useState("");
   const [time, setTime] = useState("");
   const { toggle } = useMobileMenu();
 
@@ -93,35 +93,7 @@ export default function Header() {
       </div>
 
       {/* Search — прихований на дуже малих екранах через flex shrink */}
-      <div style={{ flex: 1, maxWidth: 280, position: "relative" }}>
-        <Search
-          size={13}
-          style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }}
-        />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search..."
-          style={{
-            width: "100%",
-            padding: "6px 16px 6px 36px",
-            fontSize: 13,
-            borderRadius: 10,
-            color: "var(--text)",
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            outline: "none",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "rgba(201,140,10,0.40)";
-            e.currentTarget.style.background = "rgba(201,140,10,0.05)";
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)";
-            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-          }}
-        />
-      </div>
+      <HeaderSearch />
 
       {/* Clock — прихований через CSS на мобільному */}
       <div className="header-clock" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
