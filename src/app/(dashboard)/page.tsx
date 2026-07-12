@@ -103,6 +103,7 @@ const STATS_EMPTY = {
   targetedCurrentMonth: 0, targetedPrevMonth: 0, lastMonthLeads: 0,
   currentMonthLabel: "", prevMonthLabel: "",
   rangeData: null as DailyLeadPoint[] | null, rangeLabel: null as string | null,
+  isCustomPeriod: false, currentPeriodSub: "Поточний місяць", prevPeriodSub: "Попередній місяць",
 };
 
 export interface OverviewFilterValues {
@@ -186,6 +187,29 @@ async function getStats(filters: OverviewFilterValues = {}) {
   const range = buildDateRange(filters);
   const dateWhere: { createdAt?: DateRange } = range ? { createdAt: range } : {};
 
+  // KPI-картки «поточний/попередній»: якщо у фільтрах обрано дати — поточний = обраний період,
+  // попередній = період тієї ж довжини безпосередньо перед ним. Без дат — календарні місяці.
+  const DAY = 86400000;
+  const dayFloor = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const isCustomPeriod = !!range;
+  const curPeriodStart = range?.gte ?? startOfMonth;
+  const curPeriodEnd = range?.lte ?? now;
+  let prevPeriodStart: Date;
+  let prevPeriodEnd: Date;
+  if (isCustomPeriod) {
+    const days = Math.round((dayFloor(curPeriodEnd).getTime() - dayFloor(curPeriodStart).getTime()) / DAY) + 1;
+    prevPeriodEnd = new Date(dayFloor(curPeriodStart).getTime() - 1);
+    prevPeriodStart = new Date(dayFloor(curPeriodStart).getTime() - days * DAY);
+  } else {
+    prevPeriodStart = startOfLastMonth;
+    prevPeriodEnd = new Date(startOfMonth.getTime() - 1);
+  }
+  // Періодні лічильники не мають успадковувати createdAt з фільтра — період задає власний діапазон.
+  const whereNoDate = buildLeadWhere({ ...filters, dateFrom: undefined, dateTo: undefined });
+  const mergeND = (extra: Prisma.LeadWhereInput): Prisma.LeadWhereInput => ({ AND: [whereNoDate, extra] });
+  const curPeriodRange = { createdAt: { gte: curPeriodStart, lte: curPeriodEnd } };
+  const prevPeriodRange = { createdAt: { gte: prevPeriodStart, lte: prevPeriodEnd } };
+
   const [
     totalLeads,
     totalDeals,
@@ -234,8 +258,8 @@ async function getStats(filters: OverviewFilterValues = {}) {
     db.lead.aggregate({ _sum: { amount: true }, where: merge({ status: { notIn: LOSS_STATUSES_ALL.concat("WON") } }) }),
     db.lead.count({ where: merge({ status: "WON" }) }),
     db.lead.count({ where: merge({ status: { in: LOSS_STATUSES_ALL } }) }),
-    db.lead.count({ where: merge({ createdAt: { gte: startOfMonth } }) }),
-    db.lead.count({ where: merge({ createdAt: { gte: startOfLastMonth, lt: startOfMonth } }) }),
+    db.lead.count({ where: mergeND(curPeriodRange) }),
+    db.lead.count({ where: mergeND(prevPeriodRange) }),
     db.lead.aggregate({ _sum: { amount: true }, where: merge({ status: "WON" }) }),
     db.deal.aggregate({ _sum: { budget: true }, where: { status: { not: "COMPLETED" }, ...dateWhere } }),
     db.lead.groupBy({
@@ -255,10 +279,10 @@ async function getStats(filters: OverviewFilterValues = {}) {
       orderBy: { createdAt: "asc" },
     }),
     db.lead.count({
-      where: merge({ createdAt: { gte: startOfMonth }, status: { in: TARGETED_STATUSES } }),
+      where: mergeND({ ...curPeriodRange, status: { in: TARGETED_STATUSES } }),
     }),
     db.lead.count({
-      where: merge({ createdAt: { gte: startOfLastMonth, lt: startOfMonth }, status: { in: TARGETED_STATUSES } }),
+      where: mergeND({ ...prevPeriodRange, status: { in: TARGETED_STATUSES } }),
     }),
   ]);
 
@@ -285,6 +309,15 @@ async function getStats(filters: OverviewFilterValues = {}) {
   const currentMonthLabel = `${MONTH_UA[now.getMonth()]} ${now.getFullYear()}`;
   const prevMonthLabel = `${MONTH_UA[prevMonth]} ${prevYear}`;
 
+  // Підписи KPI-карток: обраний період і рівний йому попередній, або календарні місяці.
+  const fmtShort = (d: Date) => format(d, "dd.MM.yy");
+  const currentPeriodSub = isCustomPeriod
+    ? `${fmtShort(curPeriodStart)} – ${fmtShort(curPeriodEnd)}`
+    : "Поточний місяць";
+  const prevPeriodSub = isCustomPeriod
+    ? `${fmtShort(prevPeriodStart)} – ${fmtShort(prevPeriodEnd)}`
+    : "Попередній місяць";
+
   // Date filter set → the dynamics chart shows exactly that range instead of month tabs.
   let rangeData: DailyLeadPoint[] | null = null;
   let rangeLabel: string | null = null;
@@ -302,6 +335,7 @@ async function getStats(filters: OverviewFilterValues = {}) {
 
   return {
     rangeData, rangeLabel,
+    isCustomPeriod, currentPeriodSub, prevPeriodSub,
     totalLeads, totalDeals, totalTasks, taskDone, recentLeads,
     overdueTasks, leadsByStatus, dealsByStatus, conversion,
     leadsBySource, totalAmount, potentialAmount, wonLeads, lostLeads,
@@ -360,7 +394,7 @@ export default async function DashboardPage({
   const kpiCards = [
     {
       label: "Всього лідів",
-      sub: "Попередній місяць",
+      sub: stats.prevPeriodSub,
       value: stats.lastMonthLeads,
       trend: stats.monthlyGrowth !== 0
         ? `Поточний: ${stats.monthlyLeads} (${stats.monthlyGrowth > 0 ? "+" : ""}${stats.monthlyGrowth}%)`
@@ -373,10 +407,10 @@ export default async function DashboardPage({
     },
     {
       label: "Цільові ліди",
-      sub: "Попередній місяць",
+      sub: stats.prevPeriodSub,
       value: stats.targetedPrevMonth,
       trend: stats.lastMonthLeads > 0
-        ? `${Math.round((stats.targetedPrevMonth / stats.lastMonthLeads) * 100)}% від місяця`
+        ? `${Math.round((stats.targetedPrevMonth / stats.lastMonthLeads) * 100)}% від ${stats.isCustomPeriod ? "періоду" : "місяця"}`
         : "—",
       trendUp: true,
       Icon: Target,
@@ -386,9 +420,9 @@ export default async function DashboardPage({
     },
     {
       label: "Всього лідів",
-      sub: "Поточний місяць",
+      sub: stats.currentPeriodSub,
       value: stats.monthlyLeads,
-      trend: `${stats.currentMonthLabel}`,
+      trend: stats.isCustomPeriod ? "Обраний період" : `${stats.currentMonthLabel}`,
       trendUp: true,
       Icon: CalendarDays,
       color: "#22d3ee",
@@ -397,10 +431,10 @@ export default async function DashboardPage({
     },
     {
       label: "Цільові ліди",
-      sub: "Поточний місяць",
+      sub: stats.currentPeriodSub,
       value: stats.targetedCurrentMonth,
       trend: stats.monthlyLeads > 0
-        ? `${Math.round((stats.targetedCurrentMonth / stats.monthlyLeads) * 100)}% від місяця`
+        ? `${Math.round((stats.targetedCurrentMonth / stats.monthlyLeads) * 100)}% від ${stats.isCustomPeriod ? "періоду" : "місяця"}`
         : "—",
       trendUp: true,
       Icon: Target,
