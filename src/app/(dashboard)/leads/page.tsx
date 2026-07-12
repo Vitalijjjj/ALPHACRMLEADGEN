@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import LeadDrawer from "@/components/leads/LeadDrawer";
 import { LEAD_STATUSES, LEAD_SOURCES, LOSS_STATUSES, CHANNEL_ACCENT } from "@/lib/leadOptions";
+import { useAdCampaigns } from "@/lib/useAdCampaigns";
 import { formatDistanceToNow } from "date-fns";
 import { uk } from "date-fns/locale";
 
@@ -283,6 +284,7 @@ function TelegramLink({ username }: { username: string }) {
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const { campaigns: adCampaigns } = useAdCampaigns();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
@@ -500,9 +502,15 @@ export default function LeadsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Назва кампанії</label>
-              <input type="text" value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)} placeholder="Пошук по кампанії..."
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]" />
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Кампанія</label>
+              <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
+                <option value="">Всі кампанії</option>
+                {campaignFilter && !adCampaigns.some((c) => c.name === campaignFilter) && (
+                  <option value={campaignFilter}>{campaignFilter}</option>
+                )}
+                {adCampaigns.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.trafficType}</option>)}
+              </select>
             </div>
           </div>
           {activeFilterCount > 0 && (

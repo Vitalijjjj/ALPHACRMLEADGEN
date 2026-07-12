@@ -91,11 +91,28 @@ export const LEAD_SOURCES: { value: string; detail?: string }[] = [
   { value: "IG органіка Вітал" },
   { value: "IG Розсилки",      detail: "Нікнейм акаунту" },
   { value: "Таргет",           detail: "Назва кампанії" },
+  { value: "Автопрозвон",      detail: "Назва кампанії" },
   { value: "Контекст" },
   { value: "Сайт" },
   { value: "Сарафанне радіо",  detail: "Від якого клієнта" },
   { value: "Партнерка",        detail: "Хто партнер" },
 ];
+
+// Джерела, що є платними типами трафіку — для них існують рекламні кампанії (AdCampaign).
+// "Таргет" — денний бюджет; "Автопрозвон" — загальний бюджет + дата початку/закінчення.
+export const AD_TRAFFIC_TYPES = ["Таргет", "Автопрозвон"] as const;
+export type AdTrafficType = (typeof AD_TRAFFIC_TYPES)[number];
+
+export const AD_TRAFFIC_ACCENT: Record<string, string> = {
+  "Таргет": "#C98C0A",
+  "Автопрозвон": "#22d3ee",
+};
+
+export function normalizeTrafficType(source: string | null | undefined): AdTrafficType | null {
+  if (!source) return null;
+  const found = AD_TRAFFIC_TYPES.find((t) => t.toLowerCase() === source.trim().toLowerCase());
+  return found ?? null;
+}
 
 export const LEAD_SERVICES = [
   "АІ лендос",

@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       where: {
         ...(status ? { status: { in: statusMatchValues(status) } } : {}),
         ...(source ? { source: { equals: source, mode: "insensitive" } } : {}),
-        ...(campaign ? { sourceDetail: { contains: campaign, mode: "insensitive" } } : {}),
+        ...(campaign ? { sourceDetail: { equals: campaign, mode: "insensitive" } } : {}),
         ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
         ...(search
           ? {

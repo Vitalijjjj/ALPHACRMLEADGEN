@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import OverviewFilters from "@/components/dashboard/OverviewFilters";
+import CampaignStatsTable from "@/components/dashboard/CampaignStatsTable";
+import { getCampaignStats } from "@/lib/adStats";
 import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL, statusMatchValues } from "@/lib/leadOptions";
 import {
   Users,
@@ -163,7 +165,7 @@ function buildLeadWhere(f: OverviewFilterValues): Prisma.LeadWhereInput {
   if (f.service) where.service = f.service;
   if (f.niche) where.niche = { contains: f.niche, mode: "insensitive" };
   if (f.geo) where.geo = { contains: f.geo, mode: "insensitive" };
-  if (f.campaign) where.sourceDetail = { contains: f.campaign, mode: "insensitive" };
+  if (f.campaign) where.sourceDetail = { equals: f.campaign, mode: "insensitive" };
   if (f.amount) {
     const min = parseFloat(f.amount);
     if (!Number.isNaN(min)) where.amount = { gte: min };
@@ -347,7 +349,10 @@ export default async function DashboardPage({
     amount: firstParam(sp.amount),
     service: firstParam(sp.service),
   };
-  const stats = await getStatsSafe(filters);
+  const [stats, campaignStats] = await Promise.all([
+    getStatsSafe(filters),
+    getCampaignStats(filters.dateFrom, filters.dateTo),
+  ]);
   const taskTotal = stats.taskDone + stats.totalTasks;
   const todayTotal = stats.todayLeadsBySource.reduce((s, l) => s + l._count.source, 0);
 
@@ -636,6 +641,9 @@ export default async function DashboardPage({
           )}
         </div>
       </div>
+
+      {/* ── Рекламні кампанії ── */}
+      <CampaignStatsTable stats={campaignStats} />
 
       {/* ── Останні ліди ── */}
       <div style={CARD} className="overflow-hidden">

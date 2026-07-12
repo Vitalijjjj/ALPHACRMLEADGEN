@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard, Users, Briefcase, CheckSquare,
-  Kanban, Send, Bell, LogOut, X,
+  Kanban, Send, Bell, Megaphone, LogOut, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMobileMenu } from "@/lib/useMobileMenu";
@@ -18,6 +18,7 @@ const nav = [
   { href: "/clients",   icon: Briefcase,       label: "Clients" },
   { href: "/tasks",     icon: CheckSquare,     label: "Tasks" },
   { href: "/campaigns", icon: Send,            label: "Campaigns" },
+  { href: "/ads",       icon: Megaphone,       label: "Реклама" },
   { href: "/pushes",    icon: Bell,            label: "Пуші" },
 ];
 

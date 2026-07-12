@@ -16,6 +16,19 @@ export function ensureSchema(): Promise<void> {
     ensured = (async () => {
       await db.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "calendarAt" TIMESTAMP(3)`);
       await db.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "calendarStatus" TEXT`);
+      await db.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "AdCampaign" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "trafficType" TEXT NOT NULL DEFAULT 'Таргет',
+        "dailyBudget" DOUBLE PRECISION,
+        "totalBudget" DOUBLE PRECISION,
+        "startDate" TIMESTAMP(3),
+        "endDate" TIMESTAMP(3),
+        "active" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`);
+      await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "AdCampaign_name_trafficType_key" ON "AdCampaign"("name", "trafficType")`);
     })().catch((e) => {
       ensured = null; // retry on next call
       throw e;

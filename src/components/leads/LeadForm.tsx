@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { LEAD_STATUSES as STATUSES, LEAD_SOURCES as SOURCES, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS } from "@/lib/leadOptions";
+import { LEAD_STATUSES as STATUSES, LEAD_SOURCES as SOURCES, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS, normalizeTrafficType } from "@/lib/leadOptions";
+import { useAdCampaigns } from "@/lib/useAdCampaigns";
 
 interface LeadFormProps {
   onSave: (data: LeadFormData) => Promise<void>;
@@ -76,6 +77,8 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     createdAt: initial?.createdAt ?? new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
+  const [customCampaign, setCustomCampaign] = useState(false);
+  const { campaigns } = useAdCampaigns();
 
   const set = (k: keyof LeadFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -152,20 +155,44 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
               <label className={lbl}>Джерело</label>
               <select
                 value={data.source}
-                onChange={(e) => setData((d) => ({ ...d, source: e.target.value, sourceDetail: "" }))}
+                onChange={(e) => { setCustomCampaign(false); setData((d) => ({ ...d, source: e.target.value, sourceDetail: "" })); }}
                 className={`${f} cursor-pointer`}
               >
                 <option value="">—</option>
                 {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
               </select>
-              {SOURCES.find((s) => s.value === data.source)?.detail && (
-                <input
-                  value={data.sourceDetail}
-                  onChange={set("sourceDetail")}
-                  className={`${f} mt-1.5`}
-                  placeholder={SOURCES.find((s) => s.value === data.source)?.detail}
-                />
-              )}
+              {SOURCES.find((s) => s.value === data.source)?.detail && (() => {
+                // Для платного трафіку (Таргет/Автопрозвон) кампанія вибирається зі сторінки «Реклама»
+                const trafficType = normalizeTrafficType(data.source);
+                if (!trafficType || customCampaign) {
+                  return (
+                    <input
+                      value={data.sourceDetail}
+                      onChange={set("sourceDetail")}
+                      className={`${f} mt-1.5`}
+                      placeholder={SOURCES.find((s) => s.value === data.source)?.detail}
+                      autoFocus={customCampaign}
+                    />
+                  );
+                }
+                const options = campaigns.filter((c) => c.trafficType === trafficType);
+                const hasCurrent = !data.sourceDetail || options.some((c) => c.name.toLowerCase() === data.sourceDetail.trim().toLowerCase());
+                return (
+                  <select
+                    value={data.sourceDetail}
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") { setCustomCampaign(true); setData((d) => ({ ...d, sourceDetail: "" })); }
+                      else setData((d) => ({ ...d, sourceDetail: e.target.value }));
+                    }}
+                    className={`${f} mt-1.5 cursor-pointer`}
+                  >
+                    <option value="">— кампанія —</option>
+                    {!hasCurrent && <option value={data.sourceDetail}>{data.sourceDetail}</option>}
+                    {options.map((c) => <option key={c.id} value={c.name}>{c.name}{c.active ? "" : " (вимкнена)"}</option>)}
+                    <option value="__custom__">+ Вписати вручну</option>
+                  </select>
+                );
+              })()}
             </div>
             <div>
               <label className={lbl}>Статус</label>

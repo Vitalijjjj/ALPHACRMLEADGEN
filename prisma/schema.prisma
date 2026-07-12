@@ -125,6 +125,23 @@ enum ActivityType {
   DEAL_CREATED
 }
 
+// Рекламна кампанія (сторінка «Реклама»). Ліди прив'язуються по Lead.source
+// (= trafficType: "Таргет" | "Автопрозвон") + Lead.sourceDetail (= name).
+model AdCampaign {
+  id          String    @id @default(cuid())
+  name        String
+  trafficType String    @default("Таргет")
+  dailyBudget Float?    // Таргет: бюджет на день
+  totalBudget Float?    // Автопрозвон: загальний бюджет на кампанію
+  startDate   DateTime?
+  endDate     DateTime?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([name, trafficType])
+}
+
 model PushTemplate {
   id        String   @id @default(cuid())
   title     String?

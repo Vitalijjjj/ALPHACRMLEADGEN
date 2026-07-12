@@ -4,6 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
 import { Filter, X } from "lucide-react";
 import { LEAD_STATUSES, LEAD_SOURCES, LEAD_SERVICES } from "@/lib/leadOptions";
+import { useAdCampaigns } from "@/lib/useAdCampaigns";
 
 const FILTER_KEYS = ["dateFrom", "dateTo", "status", "niche", "source", "campaign", "geo", "amount", "service"] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
@@ -15,6 +16,7 @@ export default function OverviewFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+  const { campaigns } = useAdCampaigns();
 
   const get = (k: FilterKey) => sp.get(k) ?? "";
   const activeCount = FILTER_KEYS.reduce((n, k) => n + (sp.get(k) ? 1 : 0), 0);
@@ -75,7 +77,15 @@ export default function OverviewFilters() {
         </div>
         <div>
           <label className={lbl}>Кампанія</label>
-          <input type="text" value={get("campaign")} onChange={(e) => setParam("campaign", e.target.value)} placeholder="Назва кампанії" className={field} />
+          <select value={get("campaign")} onChange={(e) => setParam("campaign", e.target.value)} className={`${field} cursor-pointer`}>
+            <option value="">Всі кампанії</option>
+            {!campaigns.some((c) => c.name === get("campaign")) && get("campaign") && (
+              <option value={get("campaign")}>{get("campaign")}</option>
+            )}
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.name}>{c.name} · {c.trafficType}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={lbl}>Ніша</label>
