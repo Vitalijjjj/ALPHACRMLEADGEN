@@ -129,12 +129,36 @@ function buildDateRange(f: OverviewFilterValues): DateRange | undefined {
   return range.gte || range.lte ? range : undefined;
 }
 
+// A lead matches a status filter if it EVER passed through that status, not only if it's
+// there now. History lives in STATUS_CHANGE activities:
+//   "Лід створено зі статусом: X"  /  "Статус змінено: X → Y"
+function statusHistoryWhere(status: string): Prisma.LeadWhereInput {
+  const values = statusMatchValues(status);
+  return {
+    OR: [
+      { status: { in: values } },
+      {
+        activities: {
+          some: {
+            type: "STATUS_CHANGE",
+            OR: values.flatMap((v) => [
+              { content: { endsWith: `зі статусом: ${v}` } },
+              { content: { contains: `змінено: ${v} →` } },
+              { content: { startsWith: "Статус змінено:", endsWith: `→ ${v}` } },
+            ]),
+          },
+        },
+      },
+    ],
+  };
+}
+
 // Build a Prisma Lead where-clause from Overview filters. Campaign lives in sourceDetail.
 function buildLeadWhere(f: OverviewFilterValues): Prisma.LeadWhereInput {
   const where: Prisma.LeadWhereInput = {};
   const range = buildDateRange(f);
   if (range) where.createdAt = range;
-  if (f.status) where.status = { in: statusMatchValues(f.status) };
+  if (f.status) where.OR = statusHistoryWhere(f.status).OR;
   if (f.source) where.source = { equals: f.source, mode: "insensitive" };
   if (f.service) where.service = f.service;
   if (f.niche) where.niche = { contains: f.niche, mode: "insensitive" };
