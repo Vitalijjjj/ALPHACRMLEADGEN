@@ -31,8 +31,14 @@ export async function GET(req: NextRequest) {
     const potentialValues = POTENTIAL_STATUSES.flatMap(statusMatchValues);
     const leads = await db.lead.findMany({
       where: {
+        // НДЗ (Недозвон) у Potential не показується, навіть якщо на ліда запланований пуш
         ...(potential
-          ? { AND: [{ OR: [{ status: { in: potentialValues } }, { pushAt: { not: null } }] }] }
+          ? {
+              AND: [
+                { OR: [{ status: { in: potentialValues } }, { pushAt: { not: null } }] },
+                { status: { not: "MISSED_CALL" } },
+              ],
+            }
           : {}),
         ...(status ? { status: { in: statusMatchValues(status) } } : {}),
         ...(source ? { source: { equals: source, mode: "insensitive" } } : {}),

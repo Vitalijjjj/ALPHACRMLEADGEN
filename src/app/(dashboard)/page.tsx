@@ -7,7 +7,7 @@ import Link from "next/link";
 import OverviewFilters from "@/components/dashboard/OverviewFilters";
 import CampaignStatsTable from "@/components/dashboard/CampaignStatsTable";
 import { getCampaignStats } from "@/lib/adStats";
-import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUSES, WON_STATUSES, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL, statusMatchValues } from "@/lib/leadOptions";
+import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUSES, WON_STATUSES, statusMatchValues } from "@/lib/leadOptions";
 import { statusHistorySet } from "@/lib/adStats";
 import {
   Users,
@@ -25,7 +25,6 @@ import {
   type DailyLeadPoint,
 } from "@/components/dashboard/DashboardCharts";
 import { format } from "date-fns";
-import { uk } from "date-fns/locale";
 
 const MONTH_UA = [
   "Січень","Лютий","Березень","Квітень","Травень","Червень",
@@ -92,7 +91,7 @@ function buildRangeData(
 }
 
 const STATS_EMPTY = {
-  totalLeads: 0, totalDeals: 0, totalTasks: 0, taskDone: 0, recentLeads: [] as never[],
+  totalLeads: 0, totalDeals: 0, totalTasks: 0, taskDone: 0,
   overdueTasks: 0, statusRows: [] as never[], periodLeadsTotal: 0,
   conversion: 0, leadsBySource: [] as never[], totalAmount: 0, potentialAmount: 0, wonLeads: 0, lostLeads: 0,
   monthlyLeads: 0, monthlyGrowth: 0, wonAmount: 0, activePipeline: 0, avgLeadValue: 0,
@@ -212,7 +211,6 @@ async function getStats(filters: OverviewFilterValues = {}) {
     totalDeals,
     totalTasks,
     taskDone,
-    recentLeads,
     overdueTasks,
     periodStatusLeadsRaw,
     leadsBySource,
@@ -234,15 +232,6 @@ async function getStats(filters: OverviewFilterValues = {}) {
     db.deal.count({ where: dateWhere }),
     db.task.count({ where: { status: { not: "DONE" }, ...dateWhere } }),
     db.task.count({ where: { status: "DONE", ...dateWhere } }),
-    db.lead.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: {
-        id: true, name: true, status: true, instagram: true, telegram: true,
-        phone: true, source: true, amount: true, createdAt: true,
-      },
-    }),
     db.task.count({ where: { status: { not: "DONE" }, deadline: { lt: now }, ...dateWhere } }),
     // Ліди періоду з історією статусів — для розширеної таблиці «Статуси лідів»
     db.lead.findMany({
@@ -360,7 +349,7 @@ async function getStats(filters: OverviewFilterValues = {}) {
   return {
     rangeData, rangeLabel,
     isCustomPeriod, currentPeriodSub, prevPeriodSub,
-    totalLeads, totalDeals, totalTasks, taskDone, recentLeads,
+    totalLeads, totalDeals, totalTasks, taskDone,
     overdueTasks, statusRows, periodLeadsTotal, conversion,
     leadsBySource, totalAmount, potentialAmount, wonLeads, lostLeads,
     monthlyLeads, monthlyGrowth, wonAmount, activePipeline, avgLeadValue,
@@ -378,13 +367,6 @@ async function getStatsSafe(filters: OverviewFilterValues) {
     return STATS_EMPTY;
   }
 }
-
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = Object.fromEntries(
-  Object.keys(LEAD_STATUS_BADGE_LABEL).map((k) => [
-    k,
-    { label: LEAD_STATUS_BADGE_LABEL[k], cls: `${LEAD_STATUS_BADGE[k]} border` },
-  ])
-);
 
 function firstParam(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
@@ -697,95 +679,6 @@ export default async function DashboardPage({
 
       {/* ── Рекламні кампанії ── */}
       <CampaignStatsTable stats={campaignStats} />
-
-      {/* ── Останні ліди ── */}
-      <div style={CARD} className="overflow-hidden">
-        <div
-          className="flex items-center justify-between px-5 py-4"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-        >
-          <div>
-            <p className="text-sm font-semibold text-[var(--text)]">Останні ліди</p>
-            <p className="text-xs text-[var(--text-muted)]">Нещодавно додані контакти</p>
-          </div>
-          <Link
-            href="/leads"
-            className="text-xs font-semibold transition-opacity hover:opacity-80"
-            style={{ color: "var(--accent)", textShadow: "0 0 10px var(--accent-glow)" }}
-          >
-            Переглянути всіх →
-          </Link>
-        </div>
-
-        {stats.recentLeads.length === 0 ? (
-          <div className="text-center py-10 text-[var(--text-muted)] text-sm">
-            Немає лідів.{" "}
-            <Link href="/leads" style={{ color: "var(--accent)" }}>
-              Додати першого
-            </Link>
-          </div>
-        ) : (
-          <div>
-            {stats.recentLeads.map((lead, i) => {
-              const badge = STATUS_BADGE[lead.status];
-              return (
-                <Link
-                  key={lead.id}
-                  href="/leads"
-                  className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
-                  style={
-                    i < stats.recentLeads.length - 1
-                      ? { borderBottom: "1px solid rgba(255,255,255,0.03)" }
-                      : {}
-                  }
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0"
-                      style={{
-                        background: "rgba(201,140,10,0.08)",
-                        border: "1px solid rgba(201,140,10,0.16)",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      {lead.name[0]?.toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--text)] truncate">{lead.name}</p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
-                        {[lead.source, lead.phone].filter(Boolean).join(" · ") || (
-                          lead.instagram ? `@${lead.instagram}` : lead.telegram ? `@${lead.telegram}` : "—"
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
-                    {lead.amount != null && lead.amount > 0 && (
-                      <span
-                        className="text-xs font-semibold hidden sm:block"
-                        style={{ color: "var(--accent)" }}
-                      >
-                        €{lead.amount.toLocaleString()}
-                      </span>
-                    )}
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                        badge?.cls ?? "bg-zinc-500/10 text-zinc-400 border border-zinc-400/20"
-                      }`}
-                    >
-                      {badge?.label ?? lead.status}
-                    </span>
-                    <span className="text-xs text-[var(--text-dim)] hidden md:block whitespace-nowrap">
-                      {format(new Date(lead.createdAt), "d MMM", { locale: uk })}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* ── Secondary stat cards ── */}
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
