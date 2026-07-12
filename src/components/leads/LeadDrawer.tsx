@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, Video, Globe, Layers, CreditCard, TrendingUp, Pencil } from "lucide-react";
-import { ALL_UPSELL_SERVICES, LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
+import { X, Phone, Mail, Plus, CheckSquare, Clock, MessageSquare, AlertCircle, Briefcase, MapPin, Tag, Video, Globe, Layers, CreditCard, Pencil } from "lucide-react";
+import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import { LEAD_STATUSES, LEAD_STATUS_SHORT, COMMUNICATION_CHANNELS, CHANNEL_ACCENT } from "@/lib/leadOptions";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -437,23 +437,6 @@ export default function LeadDrawer({
                 </div>
               )}
 
-              {/* Upsell */}
-              {(() => {
-                const upsell = ALL_UPSELL_SERVICES.filter((s) => !lead.usedServices.includes(s));
-                return upsell.length > 0 ? (
-                  <div>
-                    <p className="text-xs mb-1.5 flex items-center gap-1" style={{ color: "#22c55e" }}>
-                      <TrendingUp size={11} />
-                      Рекомендовано допродати
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {upsell.map((s) => (
-                        <span key={s} className="px-2 py-0.5 text-xs rounded border" style={{ color: "#22c55e", borderColor: "rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.06)" }}>{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null;
-              })()}
             </div>
 
             {/* Status */}

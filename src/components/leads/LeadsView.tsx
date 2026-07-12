@@ -1,0 +1,787 @@
+"use client";
+
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Plus, Search, Phone, Mail, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp, Filter, X, CalendarPlus } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { Badge } from "@/components/ui/badge";
+import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
+import LeadDrawer from "@/components/leads/LeadDrawer";
+import { LEAD_STATUSES, LEAD_SOURCES, LOSS_STATUSES, CHANNEL_ACCENT } from "@/lib/leadOptions";
+import { useAdCampaigns } from "@/lib/useAdCampaigns";
+import { formatDistanceToNow } from "date-fns";
+import { uk } from "date-fns/locale";
+
+// Convert UTC ISO string to Europe/Warsaw (UTC+2) for datetime-local input
+function toWarsawInput(utcStr: string): string {
+  const d = new Date(new Date(utcStr).getTime() + 2 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 16);
+}
+
+interface Lead {
+  id: string;
+  name: string;
+  instagram: string | null;
+  telegram: string | null;
+  phone: string | null;
+  email: string | null;
+  comment: string | null;
+  source: string | null;
+  geo: string | null;
+  niche: string | null;
+  amount: number | null;
+  status: string;
+  siteStructure: string | null;
+  hasExtraLang: boolean;
+  languages: string | null;
+  service: string | null;
+  paymentSystem: string | null;
+  usedServices: string[];
+  projectDeadline: string | null;
+  pushAt: string | null;
+  pushComment: string | null;
+  messenger: string | null;
+  sourceDetail: string | null;
+  calendarAt: string | null;
+  calendarStatus: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count: { tasks: number; deals: number };
+}
+
+const STATUS_OPTIONS = [
+  { value: "", label: "Всі статуси" },
+  ...LEAD_STATUSES.map((s) => ({ value: s.value, label: s.label })),
+];
+
+// Quick-add a lead to Google Calendar: pick date/time + event status label.
+const CALENDAR_STATUSES = ["НДЗ", "Перезвон", "Поставити КП", "КП"];
+
+function pad(n: number) {
+  return n.toString().padStart(2, "0");
+}
+
+function buildGCalUrl(lead: Lead, dateStr: string, timeStr: string, status: string): string {
+  // Floating local time — Google Calendar interprets it in the account's timezone.
+  const start = new Date(`${dateStr}T${timeStr || "09:00"}`);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const title = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
+  const details = [
+    lead.instagram ? `Instagram: @${lead.instagram}` : "",
+    lead.telegram ? `Telegram: @${lead.telegram}` : "",
+    lead.source ? `Джерело: ${lead.source}` : "",
+    "AlphaCRM",
+  ].filter(Boolean).join("\n");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function CalendarModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () => void; onSaved: () => void }) {
+  const now = new Date();
+  const hasEvent = !!lead.calendarAt;
+  const savedLocal = lead.calendarAt ? toWarsawInput(lead.calendarAt) : null;
+  const [date, setDate] = useState(savedLocal ? savedLocal.slice(0, 10) : now.toISOString().slice(0, 10));
+  const [time, setTime] = useState(savedLocal ? savedLocal.slice(11, 16) : `${pad(now.getHours())}:00`);
+  const [status, setStatus] = useState(lead.calendarStatus ?? CALENDAR_STATUSES[0]);
+  const [saving, setSaving] = useState(false);
+
+  const field = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors";
+  const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide";
+  const preview = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
+
+  async function submit(openCalendar: boolean) {
+    setSaving(true);
+    try {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarAt: `${date}T${time || "09:00"}`, calendarStatus: status }),
+      });
+      if (openCalendar) {
+        window.open(buildGCalUrl(lead, date, time, status), "_blank", "noopener,noreferrer");
+      }
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeEvent() {
+    setSaving(true);
+    try {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarAt: null, calendarStatus: null }),
+      });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={hasEvent ? "Редагувати подію" : "Додати в Google Календар"}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={lbl}>Дата</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+          </div>
+          <div>
+            <label className={lbl}>Час</label>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
+          </div>
+        </div>
+
+        <div>
+          <label className={lbl}>Статус події</label>
+          <div className="flex flex-wrap gap-1.5">
+            {CALENDAR_STATUSES.map((s) => {
+              const active = status === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className="px-3 py-1 rounded-lg text-xs transition-all cursor-pointer border"
+                  style={active
+                    ? { background: "var(--accent-subtle)", color: "var(--accent)", borderColor: "var(--accent)" }
+                    : { background: "var(--surface-2)", color: "var(--text-muted)", borderColor: "var(--border)" }}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className={lbl}>Назва події</label>
+          <div className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--text)] break-words">
+            {preview}
+          </div>
+        </div>
+
+        {hasEvent && (
+          <p className="text-[11px] text-[var(--text-dim)] leading-snug">
+            Зміни збережуться в CRM. Стару подію в самому Google Календарі за потреби видаліть або
+            перенесіть там вручну — «+ Календар» створює нову подію.
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {hasEvent ? (
+            <button
+              onClick={removeEvent}
+              disabled={saving}
+              className="text-xs text-red-400/80 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Прибрати подію
+            </button>
+          ) : <span />}
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
+              Скасувати
+            </button>
+            <button
+              onClick={() => submit(false)}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer disabled:opacity-50"
+              style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text)" }}
+            >
+              Зберегти
+            </button>
+            <button
+              onClick={() => submit(true)}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-black transition-colors cursor-pointer disabled:opacity-50"
+              style={{ background: "var(--accent)" }}
+            >
+              <CalendarPlus size={13} />
+              Зберегти + Календар
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Small chip showing the scheduled calendar event on a lead row.
+function CalendarChip({ lead, onClick }: { lead: Lead; onClick: (e: React.MouseEvent) => void }) {
+  if (!lead.calendarAt) return null;
+  const d = toWarsawInput(lead.calendarAt);
+  const label = `${d.slice(8, 10)}.${d.slice(5, 7)} ${d.slice(11, 16)}`;
+  return (
+    <button
+      onClick={onClick}
+      title="Редагувати подію"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border cursor-pointer hover:opacity-80 transition-opacity"
+      style={{ color: "#4285F4", borderColor: "rgba(66,133,244,0.35)", background: "rgba(66,133,244,0.10)" }}
+    >
+      <CalendarPlus size={9} />
+      {label}{lead.calendarStatus ? ` · ${lead.calendarStatus}` : ""}
+    </button>
+  );
+}
+
+function ChannelChip({ channel }: { channel: string }) {
+  const accent = CHANNEL_ACCENT[channel] ?? "#26A5E4";
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border"
+      style={{ color: accent, borderColor: `${accent}55`, background: `${accent}18` }}
+    >
+      {channel}
+    </span>
+  );
+}
+
+function InstagramLink({ username }: { username: string }) {
+  return (
+    <a
+      href={`https://instagram.com/${username}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-1 text-xs hover:opacity-80 transition-opacity"
+      style={{ color: "#E4405F" }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+      </svg>
+      @{username}
+    </a>
+  );
+}
+
+function TelegramLink({ username }: { username: string }) {
+  return (
+    <a
+      href={`https://t.me/${username}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="flex items-center gap-1 text-xs hover:opacity-80 transition-opacity"
+      style={{ color: "#26A5E4" }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+      </svg>
+      @{username}
+    </a>
+  );
+}
+
+function LeadsViewInner({ potential = false }: { potential?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const { campaigns: adCampaigns } = useAdCampaigns();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [campaignFilter, setCampaignFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editLead, setEditLead] = useState<Lead | null>(null);
+  const [calendarLead, setCalendarLead] = useState<Lead | null>(null);
+  const [openLead, setOpenLead] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt">("createdAt");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const fetchLeads = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (potential) params.set("potential", "1");
+    if (search) params.set("q", search);
+    if (statusFilter) params.set("status", statusFilter);
+    if (sourceFilter) params.set("source", sourceFilter);
+    if (campaignFilter) params.set("campaign", campaignFilter);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    const res = await fetch(`/api/leads?${params}`);
+    if (!res.ok) return;
+    setLeads(await res.json());
+    setLoading(false);
+  }, [potential, search, statusFilter, sourceFilter, campaignFilter, dateFrom, dateTo]);
+
+  const activeFilterCount =
+    (statusFilter ? 1 : 0) + (sourceFilter ? 1 : 0) + (campaignFilter ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+
+  function resetFilters() {
+    setStatusFilter("");
+    setSourceFilter("");
+    setCampaignFilter("");
+    setDateFrom("");
+    setDateTo("");
+  }
+
+  useEffect(() => {
+    setSearching(true);
+    const t = setTimeout(() => fetchLeads().finally(() => setSearching(false)), 400);
+    return () => clearTimeout(t);
+  }, [fetchLeads]);
+
+  // Глобальний пошук з хедера: /leads?q=... підставляє пошук, /leads?open=<id> відкриває ліда.
+  // Параметри одразу знімаються з URL, щоб повторний перехід спрацював знову.
+  useEffect(() => {
+    const q = searchParams.get("q");
+    const open = searchParams.get("open");
+    if (q) setSearch(q);
+    if (open) setOpenLead(open);
+    if (q || open) router.replace(pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
+
+  async function createLead(data: LeadFormData) {
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert("Помилка створення: " + (err.detail || err.error || res.status));
+      return;
+    }
+    setShowCreate(false);
+    fetchLeads();
+  }
+
+  async function updateLead(data: LeadFormData) {
+    if (!editLead) return;
+    const res = await fetch(`/api/leads/${editLead.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert("Помилка збереження: " + (err.detail || err.error || res.status));
+      return;
+    }
+    setEditLead(null);
+    fetchLeads();
+  }
+
+  async function deleteLead(id: string) {
+    setConfirmDeleteId(null);
+    await fetch(`/api/leads/${id}`, { method: "DELETE" });
+    fetchLeads();
+  }
+
+  const lossSet = new Set(LOSS_STATUSES);
+  const potentialAmount = leads.reduce((s, l) =>
+    l.status !== "WON" && !lossSet.has(l.status) ? s + (l.amount ?? 0) : s, 0);
+  const wonAmount = leads.reduce((s, l) => l.status === "WON" ? s + (l.amount ?? 0) : s, 0);
+
+  const sortedLeads = [...leads].sort((a, b) => {
+    const diff = new Date(a[sortBy]).getTime() - new Date(b[sortBy]).getTime();
+    return sortDir === "desc" ? -diff : diff;
+  });
+
+  return (
+    <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 overflow-x-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-[var(--text)]">{potential ? "Potential" : "Leads"}</h1>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            {leads.length} контактів
+            {potentialAmount > 0 && (
+              <span className="ml-2 font-medium" style={{ color: "var(--accent)" }}>
+                · €{potentialAmount.toLocaleString()} потенційно
+              </span>
+            )}
+            {wonAmount > 0 && (
+              <span className="ml-2 font-medium" style={{ color: "#22c55e" }}>
+                · €{wonAmount.toLocaleString()} зароблено
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1.5 px-3 py-2 text-black text-sm rounded-lg transition-colors cursor-pointer font-semibold"
+          style={{ background: "var(--accent)" }}
+        >
+          <Plus size={15} />
+          Новий лід
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
+          {searching
+            ? <div className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+            : <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          }
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Пошук..."
+            className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="flex-1 min-w-0 sm:flex-none px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+          >
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {/* Filters toggle */}
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors cursor-pointer shrink-0"
+            style={showFilters || activeFilterCount > 0
+              ? { background: "var(--accent-subtle)", borderColor: "var(--accent)", color: "var(--accent)" }
+              : { background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+          >
+            <Filter size={14} />
+            Фільтри
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-black" style={{ background: "var(--accent)" }}>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Sort switch */}
+          <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5 shrink-0">
+            <button
+              onClick={() => setSortBy("createdAt")}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "createdAt" ? "text-black font-medium" : "text-[var(--text-muted)]"}`}
+              style={sortBy === "createdAt" ? { background: "var(--accent)" } : {}}
+            >
+              Додано
+            </button>
+            <button
+              onClick={() => setSortBy("updatedAt")}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "updatedAt" ? "text-black font-medium" : "text-[var(--text-muted)]"}`}
+              style={sortBy === "updatedAt" ? { background: "var(--accent)" } : {}}
+            >
+              Оновлено
+            </button>
+            <button
+              onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
+              className="p-1 text-[var(--text-muted)] transition-colors cursor-pointer"
+            >
+              {sortDir === "desc" ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Expandable filter panel ── */}
+      {showFilters && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 sm:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата від</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата до</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Джерело</label>
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
+                <option value="">Всі джерела</option>
+                {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Кампанія</label>
+              <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
+                <option value="">Всі кампанії</option>
+                {campaignFilter && !adCampaigns.some((c) => c.name === campaignFilter) && (
+                  <option value={campaignFilter}>{campaignFilter}</option>
+                )}
+                {adCampaigns.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.trafficType}</option>)}
+              </select>
+            </div>
+          </div>
+          {activeFilterCount > 0 && (
+            <div className="flex justify-end mt-3">
+              <button onClick={resetFilters}
+                className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
+                <X size={12} /> Скинути фільтри
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Mobile cards (< sm) ── */}
+      <div className="block sm:hidden space-y-2">
+        {loading ? (
+          <p className="text-center py-10 text-sm text-[var(--text-muted)]">Завантаження...</p>
+        ) : sortedLeads.length === 0 ? (
+          <p className="text-center py-10 text-sm text-[var(--text-muted)]">Лідів немає</p>
+        ) : sortedLeads.map((lead) => (
+          <div
+            key={lead.id}
+            onClick={() => setOpenLead(lead.id)}
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3 cursor-pointer active:opacity-80 transition-opacity"
+          >
+            <div className="flex items-start justify-between gap-2 mb-1.5">
+              <div className="min-w-0">
+                <p className="font-medium text-[var(--text)] truncate">{lead.name}</p>
+                {lead.niche && <p className="text-xs text-[var(--text-muted)] truncate">{lead.niche}</p>}
+              </div>
+              <div className="shrink-0 flex items-center gap-1.5">
+                <Badge value={lead.status} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }}
+                  title="Додати в Google Календар"
+                  className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                >
+                  <CalendarPlus size={13} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditLead(lead); }}
+                  className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                >
+                  <Pencil size={13} />
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {lead.instagram && <InstagramLink username={lead.instagram} />}
+              {lead.telegram && <TelegramLink username={lead.telegram} />}
+              {lead.phone && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(lead.phone!);
+                    setCopiedPhone(lead.id);
+                    setTimeout(() => setCopiedPhone(null), 1500);
+                  }}
+                  className="flex items-center gap-1 text-xs text-[var(--text-muted)] cursor-pointer"
+                >
+                  <Phone size={10} />
+                  {copiedPhone === lead.id ? <span className="text-green-400">✓</span> : lead.phone}
+                </button>
+              )}
+              {lead.source && <span className="text-xs text-[var(--text-muted)]">{lead.source}</span>}
+              {lead.messenger && <ChannelChip channel={lead.messenger} />}
+              <CalendarChip lead={lead} onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }} />
+              {lead.amount ? (
+                <span className="text-xs font-semibold ml-auto" style={{ color: "var(--accent)" }}>
+                  €{lead.amount.toLocaleString()}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop table (≥ sm) ── */}
+      <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border)]">
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Ім'я</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Соцмережі</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Контакти</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Статус</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Джерело / Гео</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Сума</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Оновлено</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">Завантаження...</td></tr>
+            ) : sortedLeads.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">Лідів немає</td></tr>
+            ) : sortedLeads.map((lead) => (
+              <tr
+                key={lead.id}
+                className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
+                onClick={() => setOpenLead(lead.id)}
+              >
+                <td className="px-4 py-3">
+                  <div className="font-medium text-[var(--text)]">{lead.name}</div>
+                  {lead.niche && <div className="text-xs text-[var(--text-muted)] truncate max-w-[140px]">{lead.niche}</div>}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    {lead.instagram && <InstagramLink username={lead.instagram} />}
+                    {lead.telegram && <TelegramLink username={lead.telegram} />}
+                    {!lead.instagram && !lead.telegram && <span className="text-xs text-[var(--text-dim)]">—</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    {lead.phone && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(lead.phone!);
+                          setCopiedPhone(lead.id);
+                          setTimeout(() => setCopiedPhone(null), 1500);
+                        }}
+                        className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                      >
+                        <Phone size={10} />
+                        {copiedPhone === lead.id ? <span className="text-green-400">✓ Скопійовано</span> : lead.phone}
+                      </button>
+                    )}
+                    {lead.email && <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Mail size={10} />{lead.email}</span>}
+                    {!lead.phone && !lead.email && <span className="text-xs text-[var(--text-dim)]">—</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge value={lead.status} />
+                    <CalendarChip lead={lead} onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }} />
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-xs text-[var(--text-muted)]">{lead.source ?? "—"}</div>
+                  {lead.geo && <div className="text-xs text-[var(--text-dim)]">{lead.geo}</div>}
+                  {lead.messenger && <div className="mt-1"><ChannelChip channel={lead.messenger} /></div>}
+                </td>
+                <td className="px-4 py-3">
+                  {lead.amount
+                    ? <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>€{lead.amount.toLocaleString()}</span>
+                    : <span className="text-xs text-[var(--text-dim)]">—</span>}
+                </td>
+                <td className="px-4 py-3 text-xs text-[var(--text-muted)]">
+                  {formatDistanceToNow(new Date(lead.updatedAt), { addSuffix: true, locale: uk })}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setCalendarLead(lead)}
+                      title={lead.calendarAt ? "Редагувати подію" : "Додати в Google Календар"}
+                      className="p-1.5 rounded hover:bg-[var(--border)] transition-colors cursor-pointer"
+                      style={{ color: lead.calendarAt ? "#4285F4" : "var(--text-muted)" }}
+                    >
+                      <CalendarPlus size={13} />
+                    </button>
+                    <button onClick={() => setEditLead(lead)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => setConfirmDeleteId(lead.id)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--border)] transition-colors cursor-pointer">
+                      <Trash2 size={13} />
+                    </button>
+                    <ChevronRight size={13} className="text-[var(--text-muted)]" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modals */}
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Новий лід" size="xl">
+        <LeadForm onSave={createLead} onCancel={() => setShowCreate(false)} />
+      </Modal>
+
+      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Редагувати ліда" size="xl">
+        {editLead && (
+          <LeadForm
+            onSave={updateLead}
+            onCancel={() => setEditLead(null)}
+            initial={{
+              name: editLead.name,
+              instagram: editLead.instagram ?? "",
+              telegram: editLead.telegram ?? "",
+              phone: editLead.phone ?? "",
+              email: editLead.email ?? "",
+              comment: editLead.comment ?? "",
+              source: editLead.source ?? "",
+              sourceDetail: editLead.sourceDetail ?? "",
+              geo: editLead.geo ?? "",
+              niche: editLead.niche ?? "",
+              amount: editLead.amount?.toString() ?? "",
+              status: editLead.status,
+              siteStructure: editLead.siteStructure ?? "",
+              hasExtraLang: editLead.hasExtraLang ?? false,
+              languages: editLead.languages ?? "",
+              service: editLead.service ?? "",
+              paymentSystem: editLead.paymentSystem ?? "",
+              paymentSystemCustom: "",
+              usedServices: editLead.usedServices ?? [],
+              projectDeadline: editLead.projectDeadline ?? "",
+              pushAt: editLead.pushAt ? toWarsawInput(editLead.pushAt) : "",
+              pushComment: editLead.pushComment ?? "",
+              messenger: editLead.messenger ?? "",
+              createdAt: editLead.createdAt?.slice(0, 10) ?? "",
+            }}
+          />
+        )}
+      </Modal>
+
+      {openLead && (
+        <LeadDrawer leadId={openLead} onClose={() => setOpenLead(null)} onUpdate={fetchLeads} />
+      )}
+
+      {calendarLead && (
+        <CalendarModal lead={calendarLead} onClose={() => setCalendarLead(null)} onSaved={fetchLeads} />
+      )}
+
+      {/* Delete confirmation */}
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="Видалити ліда?">
+        <p className="text-sm text-[var(--text-muted)] mb-5">
+          Цю дію не можна скасувати. Лід та всі пов'язані задачі й активності будуть видалені.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setConfirmDeleteId(null)}
+            className="px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+          >
+            Скасувати
+          </button>
+          <button
+            onClick={() => confirmDeleteId && deleteLead(confirmDeleteId)}
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors cursor-pointer"
+          >
+            Так, видалити
+          </button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// Спільний вигляд для вкладок Leads та Potential (potential — гарячі стадії + пуші).
+// useSearchParams вимагає Suspense-межу на статично згенерованій сторінці.
+export default function LeadsView({ potential = false }: { potential?: boolean }) {
+  return (
+    <Suspense fallback={null}>
+      <LeadsViewInner potential={potential} />
+    </Suspense>
+  );
+}

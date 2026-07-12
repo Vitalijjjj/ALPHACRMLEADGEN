@@ -98,7 +98,7 @@ function spentInPeriod(
 }
 
 // Всі статуси, в яких лід будь-коли перебував: поточний + розібрана історія STATUS_CHANGE.
-function statusHistorySet(current: string, activityContents: string[]): Set<string> {
+export function statusHistorySet(current: string, activityContents: string[]): Set<string> {
   const set = new Set([current]);
   for (const content of activityContents) {
     let m = content.match(/^Лід створено зі статусом: (.+)$/);
@@ -116,10 +116,10 @@ function priceOf(spent: number, count: number): number | null {
   return spent > 0 && count > 0 ? spent / count : null;
 }
 
-// Період: обраний фільтрами дат, інакше — останні 30 днів.
+// Період: обраний фільтрами дат, інакше — поточний місяць.
 export async function getCampaignStats(dateFrom?: string, dateTo?: string): Promise<CampaignStatsResult> {
   const now = new Date();
-  const periodStart = dateFrom ? new Date(dateFrom) : new Date(now.getTime() - 30 * DAY);
+  const periodStart = dateFrom ? new Date(dateFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = dateTo ? new Date(dateTo) : now;
   periodEnd.setHours(23, 59, 59, 999);
   const periodLabel = `${fmt(periodStart)} – ${fmt(periodEnd)}`;

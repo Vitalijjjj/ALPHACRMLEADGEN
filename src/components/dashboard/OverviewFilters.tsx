@@ -12,6 +12,49 @@ type FilterKey = (typeof FILTER_KEYS)[number];
 const field = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]";
 const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide";
 
+// Швидкі пресети періоду: заповнюють Дата від / Дата до одним кліком.
+const toLocalISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const DATE_PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
+  {
+    label: "Весь час",
+    range: () => ({ from: "2020-01-01", to: toLocalISO(new Date()) }),
+  },
+  {
+    label: "Рік",
+    range: () => {
+      const now = new Date();
+      const from = new Date(now); from.setFullYear(now.getFullYear() - 1); from.setDate(from.getDate() + 1);
+      return { from: toLocalISO(from), to: toLocalISO(now) };
+    },
+  },
+  {
+    label: "Квартал",
+    range: () => {
+      const now = new Date();
+      const from = new Date(now); from.setMonth(now.getMonth() - 3); from.setDate(from.getDate() + 1);
+      return { from: toLocalISO(from), to: toLocalISO(now) };
+    },
+  },
+  {
+    label: "7 днів",
+    range: () => {
+      const now = new Date();
+      const from = new Date(now); from.setDate(now.getDate() - 6);
+      return { from: toLocalISO(from), to: toLocalISO(now) };
+    },
+  },
+  {
+    label: "2 дні",
+    range: () => {
+      const now = new Date();
+      const from = new Date(now); from.setDate(now.getDate() - 1);
+      return { from: toLocalISO(from), to: toLocalISO(now) };
+    },
+  },
+];
+
 export default function OverviewFilters() {
   const router = useRouter();
   const pathname = usePathname();
@@ -33,6 +76,17 @@ export default function OverviewFilters() {
 
   const reset = () => router.replace(pathname, { scroll: false });
 
+  // Пресет ставить обидві дати одним оновленням URL
+  const applyPreset = useCallback(
+    (from: string, to: string) => {
+      const params = new URLSearchParams(sp.toString());
+      params.set("dateFrom", from);
+      params.set("dateTo", to);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, sp]
+  );
+
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 sm:p-4 relative z-10">
       <div className="flex items-center justify-between mb-3">
@@ -50,6 +104,26 @@ export default function OverviewFilters() {
             <X size={12} /> Скинути
           </button>
         )}
+      </div>
+
+      {/* Швидкі періоди */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        {DATE_PRESETS.map((p) => {
+          const r = p.range();
+          const active = get("dateFrom") === r.from && get("dateTo") === r.to;
+          return (
+            <button
+              key={p.label}
+              onClick={() => applyPreset(r.from, r.to)}
+              className="px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer"
+              style={active
+                ? { background: "var(--accent-subtle, rgba(201,140,10,0.12))", borderColor: "var(--accent)", color: "var(--accent)" }
+                : { background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">

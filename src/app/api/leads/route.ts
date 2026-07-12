@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, ensureSchema } from "@/lib/db";
-import { statusMatchValues } from "@/lib/leadOptions";
+import { statusMatchValues, POTENTIAL_STATUSES } from "@/lib/leadOptions";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
   const campaign = searchParams.get("campaign") ?? undefined;
   const dateFrom = searchParams.get("dateFrom") ?? undefined;
   const dateTo = searchParams.get("dateTo") ?? undefined;
+  // Вкладка Potential: гарячі стадії + всі ліди із запланованим пушем
+  const potential = searchParams.get("potential") === "1";
 
   // Campaign name is stored in Lead.sourceDetail (e.g. for "Таргет" source).
   const createdAt: { gte?: Date; lte?: Date } = {};
@@ -26,8 +28,12 @@ export async function GET(req: NextRequest) {
 
   try {
     await ensureSchema();
+    const potentialValues = POTENTIAL_STATUSES.flatMap(statusMatchValues);
     const leads = await db.lead.findMany({
       where: {
+        ...(potential
+          ? { AND: [{ OR: [{ status: { in: potentialValues } }, { pushAt: { not: null } }] }] }
+          : {}),
         ...(status ? { status: { in: statusMatchValues(status) } } : {}),
         ...(source ? { source: { equals: source, mode: "insensitive" } } : {}),
         ...(campaign ? { sourceDetail: { equals: campaign, mode: "insensitive" } } : {}),

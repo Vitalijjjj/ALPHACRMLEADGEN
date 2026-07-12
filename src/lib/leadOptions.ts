@@ -79,6 +79,12 @@ export function statusMatchValues(status: string): string[] {
   return [status, ...(LEGACY_STATUS_ALIASES[status] ?? [])];
 }
 
+// Вкладка Potential: ліди на «гарячих» стадіях (КП, Інвойс, дотики, Думає, Цікаво).
+// Додатково туди потрапляють усі ліди із запланованим пушем (pushAt) — незалежно від статусу.
+export const POTENTIAL_STATUSES = [
+  "PROPOSAL", "INVOICE", "TOUCH_1", "TOUCH_2", "TOUCH_3", "THINKING", "INTERESTED",
+];
+
 // "Цільові" (qualified) leads — everything past first contact that is still in play or won.
 export const TARGETED_STATUSES = [
   "CONTACTED", "TARGETED", "SCHEDULED_PROPOSAL", "SET_PROPOSAL", "PROPOSAL", "INVOICE",
@@ -92,6 +98,7 @@ export const LEAD_SOURCES: { value: string; detail?: string }[] = [
   { value: "IG Розсилки",      detail: "Нікнейм акаунту" },
   { value: "Таргет",           detail: "Назва кампанії" },
   { value: "Автопрозвон",      detail: "Назва кампанії" },
+  { value: "Мессенджер" },
   { value: "Контекст" },
   { value: "Сайт" },
   { value: "Сарафанне радіо",  detail: "Від якого клієнта" },

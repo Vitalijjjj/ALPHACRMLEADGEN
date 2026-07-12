@@ -7,7 +7,8 @@ import Link from "next/link";
 import OverviewFilters from "@/components/dashboard/OverviewFilters";
 import CampaignStatsTable from "@/components/dashboard/CampaignStatsTable";
 import { getCampaignStats } from "@/lib/adStats";
-import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL, statusMatchValues } from "@/lib/leadOptions";
+import { TARGETED_STATUSES, LOSS_STATUSES_ALL, LEAD_STATUSES, WON_STATUSES, LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL, statusMatchValues } from "@/lib/leadOptions";
+import { statusHistorySet } from "@/lib/adStats";
 import {
   Users,
   Briefcase,
@@ -18,8 +19,6 @@ import {
   CalendarDays,
 } from "lucide-react";
 import {
-  LeadDonutChart,
-  DealBarChart,
   MiniLineChart,
   LeadDynamicsSection,
   CARD,
@@ -94,7 +93,7 @@ function buildRangeData(
 
 const STATS_EMPTY = {
   totalLeads: 0, totalDeals: 0, totalTasks: 0, taskDone: 0, recentLeads: [] as never[],
-  overdueTasks: 0, leadsByStatus: [] as never[], dealsByStatus: [] as never[],
+  overdueTasks: 0, statusRows: [] as never[], periodLeadsTotal: 0,
   conversion: 0, leadsBySource: [] as never[], totalAmount: 0, potentialAmount: 0, wonLeads: 0, lostLeads: 0,
   monthlyLeads: 0, monthlyGrowth: 0, wonAmount: 0, activePipeline: 0, avgLeadValue: 0,
   todayLeadsBySource: [] as never[], currentMonthData: [] as never[], prevMonthData: [] as never[],
@@ -215,8 +214,7 @@ async function getStats(filters: OverviewFilterValues = {}) {
     taskDone,
     recentLeads,
     overdueTasks,
-    leadsByStatus,
-    dealsByStatus,
+    periodStatusLeadsRaw,
     leadsBySource,
     amountAgg,
     potentialAmountAgg,
@@ -246,19 +244,25 @@ async function getStats(filters: OverviewFilterValues = {}) {
       },
     }),
     db.task.count({ where: { status: { not: "DONE" }, deadline: { lt: now }, ...dateWhere } }),
-    db.lead.groupBy({ by: ["status"], _count: { status: true }, where }),
-    db.deal.groupBy({ by: ["status"], _count: { status: true }, where: dateWhere }),
+    // Ліди періоду з історією статусів — для розширеної таблиці «Статуси лідів»
+    db.lead.findMany({
+      where: mergeND(curPeriodRange),
+      select: {
+        status: true, amount: true,
+        activities: { where: { type: "STATUS_CHANGE" }, select: { content: true } },
+      },
+    }),
     db.lead.groupBy({
-      by: ["source"], _count: { source: true }, where,
+      by: ["source"], _count: { source: true }, where: mergeND(curPeriodRange),
       orderBy: { _count: { source: "desc" } }, take: 5,
     }),
-    db.lead.aggregate({ _sum: { amount: true }, where }),
+    db.lead.aggregate({ _sum: { amount: true }, where: mergeND(curPeriodRange) }),
     db.lead.aggregate({ _sum: { amount: true }, where: merge({ status: { notIn: LOSS_STATUSES_ALL.concat("WON") } }) }),
-    db.lead.count({ where: merge({ status: "WON" }) }),
-    db.lead.count({ where: merge({ status: { in: LOSS_STATUSES_ALL } }) }),
+    db.lead.count({ where: mergeND({ ...curPeriodRange, status: "WON" }) }),
+    db.lead.count({ where: mergeND({ ...curPeriodRange, status: { in: LOSS_STATUSES_ALL } }) }),
     db.lead.count({ where: mergeND(curPeriodRange) }),
     db.lead.count({ where: mergeND(prevPeriodRange) }),
-    db.lead.aggregate({ _sum: { amount: true }, where: merge({ status: "WON" }) }),
+    db.lead.aggregate({ _sum: { amount: true }, where: mergeND({ ...curPeriodRange, status: "WON" }) }),
     db.deal.aggregate({ _sum: { budget: true }, where: { status: { not: "COMPLETED" }, ...dateWhere } }),
     db.lead.groupBy({
       by: ["source"],
@@ -284,12 +288,33 @@ async function getStats(filters: OverviewFilterValues = {}) {
     }),
   ]);
 
-  const conversion = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
+  // Виграно/програно/конверсія/суми — за обраний період (без фільтра — поточний місяць)
+  const conversion = monthlyLeads > 0 ? Math.round((wonLeads / monthlyLeads) * 100) : 0;
   const totalAmount = amountAgg._sum.amount ?? 0;
   const potentialAmount = potentialAmountAgg._sum.amount ?? 0;
   const wonAmount = wonAmountAgg._sum.amount ?? 0;
   const activePipeline = activeDealsBudget._sum.budget ?? 0;
-  const avgLeadValue = totalLeads > 0 ? Math.round(totalAmount / totalLeads) : 0;
+  const avgLeadValue = monthlyLeads > 0 ? Math.round(totalAmount / monthlyLeads) : 0;
+
+  // Розширена таблиця статусів: зараз у статусі / побували (по історії) / конверсія в продаж / сума
+  const parsedHistory = periodStatusLeadsRaw.map((l) => ({
+    status: l.status,
+    amount: l.amount ?? 0,
+    history: statusHistorySet(l.status, l.activities.map((a) => a.content)),
+  }));
+  const statusRows = LEAD_STATUSES.map((def) => {
+    const values = statusMatchValues(def.value);
+    let current = 0, ever = 0, won = 0, amount = 0;
+    for (const lead of parsedHistory) {
+      if (values.includes(lead.status)) { current++; amount += lead.amount; }
+      if (values.some((v) => lead.history.has(v))) {
+        ever++;
+        if (WON_STATUSES.some((w) => lead.history.has(w))) won++;
+      }
+    }
+    return { value: def.value, label: def.label, accent: def.accent, current, ever, won, amount };
+  }).filter((r) => r.current > 0 || r.ever > 0);
+  const periodLeadsTotal = parsedHistory.length;
   const monthlyGrowth =
     lastMonthLeads > 0
       ? Math.round(((monthlyLeads - lastMonthLeads) / lastMonthLeads) * 100)
@@ -335,7 +360,7 @@ async function getStats(filters: OverviewFilterValues = {}) {
     rangeData, rangeLabel,
     isCustomPeriod, currentPeriodSub, prevPeriodSub,
     totalLeads, totalDeals, totalTasks, taskDone, recentLeads,
-    overdueTasks, leadsByStatus, dealsByStatus, conversion,
+    overdueTasks, statusRows, periodLeadsTotal, conversion,
     leadsBySource, totalAmount, potentialAmount, wonLeads, lostLeads,
     monthlyLeads, monthlyGrowth, wonAmount, activePipeline, avgLeadValue,
     todayLeadsBySource, currentMonthData, prevMonthData,
@@ -795,18 +820,71 @@ export default async function DashboardPage({
         })}
       </div>
 
-      {/* ── Charts row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div style={CARD} className="p-5">
-          <p className="text-sm font-semibold text-[var(--text)] mb-0.5">Статуси лідів</p>
-          <p className="text-xs text-[var(--text-muted)] mb-5">Розподіл за статусом</p>
-          <LeadDonutChart data={stats.leadsByStatus} />
+      {/* ── Статуси лідів (розширено) ── */}
+      <div style={CARD} className="overflow-hidden">
+        <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <p className="text-sm font-semibold text-[var(--text)]">Статуси лідів</p>
+          <p className="text-xs text-[var(--text-muted)]">
+            Зараз у статусі та скільки лідів пройшло через статус · {stats.currentPeriodSub}
+          </p>
         </div>
-        <div style={CARD} className="p-5">
-          <p className="text-sm font-semibold text-[var(--text)] mb-0.5">Pipeline угод</p>
-          <p className="text-xs text-[var(--text-muted)] mb-4">По стадіях</p>
-          <DealBarChart data={stats.dealsByStatus} />
-        </div>
+        {stats.statusRows.length === 0 ? (
+          <p className="text-center py-10 text-sm text-[var(--text-muted)]">За період немає лідів</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <th className="text-left font-medium px-5 py-2.5">Статус</th>
+                  <th className="text-right font-medium px-3 py-2.5">Зараз у статусі</th>
+                  <th className="text-right font-medium px-3 py-2.5">% від лідів</th>
+                  <th className="text-right font-medium px-3 py-2.5" title="Скільки лідів періоду будь-коли пройшло через цей статус">Побували</th>
+                  <th className="text-right font-medium px-3 py-2.5" title="Скільки з тих, хто пройшов статус, дійшли до продажу">Конв. у продаж</th>
+                  <th className="text-right font-medium px-5 py-2.5">Сума (€)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.statusRows.map((r) => {
+                  const pct = stats.periodLeadsTotal > 0 ? Math.round((r.current / stats.periodLeadsTotal) * 100) : 0;
+                  const conv = r.ever > 0 ? Math.round((r.won / r.ever) * 100) : 0;
+                  const barPct = stats.periodLeadsTotal > 0 ? Math.max((r.current / stats.periodLeadsTotal) * 100, r.current > 0 ? 2 : 0) : 0;
+                  return (
+                    <tr key={r.value} className="hover:bg-white/[0.02] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                      <td className="px-5 py-2">
+                        <div className="flex items-center gap-2 min-w-[180px]">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.accent }} />
+                          <span className="text-[var(--text)] whitespace-nowrap">{r.label}</span>
+                        </div>
+                        <div className="h-0.5 rounded-full mt-1.5" style={{ background: "rgba(255,255,255,0.05)" }}>
+                          <div className="h-0.5 rounded-full" style={{ width: `${barPct}%`, background: r.accent, boxShadow: `0 0 6px ${r.accent}60` }} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: r.accent }}>{r.current}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[var(--text-muted)]">{pct}%</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-[var(--text)]">{r.ever}</td>
+                      <td className="px-3 py-2 text-right tabular-nums" style={{ color: conv > 0 ? "#22c55e" : "var(--text-dim)" }}>
+                        {r.ever > 0 ? `${conv}%` : "—"}
+                      </td>
+                      <td className="px-5 py-2 text-right tabular-nums" style={{ color: "var(--accent)" }}>
+                        {r.amount > 0 ? `€${r.amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <td className="px-5 py-2.5 text-xs font-semibold text-[var(--text)]">Загальний підсумок</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-bold" style={{ color: "var(--accent)" }}>{stats.periodLeadsTotal}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--text-muted)]">100%</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-[var(--text-dim)]">—</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold" style={{ color: "#22c55e" }}>{stats.conversion}%</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums font-semibold" style={{ color: "var(--accent)" }}>
+                    €{stats.totalAmount.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── Metrics + Sources ── */}
@@ -825,13 +903,13 @@ export default async function DashboardPage({
             {
               label: "Програно лідів",
               value: stats.lostLeads,
-              sub: stats.totalLeads > 0
-                ? `${Math.round((stats.lostLeads / stats.totalLeads) * 100)}% від усіх`
+              sub: stats.monthlyLeads > 0
+                ? `${Math.round((stats.lostLeads / stats.monthlyLeads) * 100)}% від періоду`
                 : "—",
               color: "#f87171",
             },
             {
-              label: "Нових цього місяця",
+              label: stats.isCustomPeriod ? "Нових за період" : "Нових цього місяця",
               value: stats.monthlyLeads,
               sub: stats.monthlyGrowth !== 0
                 ? `${stats.monthlyGrowth > 0 ? "+" : ""}${stats.monthlyGrowth}% vs минулий`
@@ -870,7 +948,7 @@ export default async function DashboardPage({
         {/* Lead sources */}
         <div style={CARD} className="p-5">
           <p className="text-sm font-semibold text-[var(--text)] mb-0.5">Джерела лідів</p>
-          <p className="text-xs text-[var(--text-muted)] mb-4">Звідки приходять контакти</p>
+          <p className="text-xs text-[var(--text-muted)] mb-4">Звідки приходять контакти · {stats.currentPeriodSub}</p>
           {stats.leadsBySource.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">Немає даних</p>
           ) : (

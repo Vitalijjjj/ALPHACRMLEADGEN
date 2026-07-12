@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
-  LayoutDashboard, Users, Briefcase, CheckSquare,
+  LayoutDashboard, Users, Flame, CheckSquare,
   Kanban, Send, Bell, Megaphone, LogOut, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ const nav = [
   { href: "/",          icon: LayoutDashboard, label: "Overview" },
   { href: "/leads",     icon: Users,           label: "Leads" },
   { href: "/pipeline",  icon: Kanban,          label: "Pipeline" },
-  { href: "/clients",   icon: Briefcase,       label: "Clients" },
+  { href: "/potential", icon: Flame,           label: "Potential" },
   { href: "/tasks",     icon: CheckSquare,     label: "Tasks" },
   { href: "/campaigns", icon: Send,            label: "Campaigns" },
   { href: "/ads",       icon: Megaphone,       label: "Реклама" },
