@@ -15,6 +15,7 @@ import {
   type Role, type FunnelPerm, type AccessSettings,
 } from "@/lib/access";
 import { useAccess } from "@/lib/useAccess";
+import SourceRename from "@/components/leads/SourceRename";
 import { Modal } from "@/components/ui/modal";
 import { LEGACY_MIGRATION } from "@/lib/leadOptions";
 import { useCrmSettings } from "@/lib/useCrmSettings";
@@ -1537,6 +1538,8 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+
+      {me?.owner && <SourceRename />}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--border)] overflow-x-auto no-scrollbar">

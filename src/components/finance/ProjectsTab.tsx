@@ -25,6 +25,7 @@ import { projectProgress, type Progress } from "@/lib/projectProgress";
 import { PrivacyButton } from "@/components/ui/Privacy";
 import { CUR_SYMBOL, CurrencyButtons, FieldLabel, FormFooter, Panel, TemplateCards, cellLabelCls, fieldCls, type CardOption } from "@/components/ui/formKit";
 import { LEAD_SERVICES } from "@/lib/leadOptions";
+import { TaskFlag, useOpenTasksByLead } from "@/components/tasks/TaskFlag";
 
 type SortKey = "name" | "value" | "income" | "left" | "costs" | "cash" | "margin" | "progress";
 type Filter = "deals" | "debt" | "sheet";
@@ -72,6 +73,7 @@ const FILTER_KEY = "projects-filter";
 // Projects imported from the sheet and not linked to a deal yet are under «З таблиці».
 export default function ProjectsTab({ canEdit, onOpenLead }: { canEdit: boolean; onOpenLead: (id: string) => void }) {
   const d = usePnlData();
+  const openTasks = useOpenTasksByLead();
   const { settings, save: saveSettings } = useCrmSettings();
   const { campaigns: adCampaigns } = useAdCampaigns();
   const qc = useQueryClient();
@@ -305,6 +307,7 @@ export default function ProjectsTab({ canEdit, onOpenLead }: { canEdit: boolean;
                           className="w-full px-2 py-1 rounded-md bg-[var(--surface-2)] border border-[var(--accent)]/60 text-sm text-[var(--text)] outline-none" />
                       ) : (
                         <div className="group/name flex items-center gap-1.5 min-w-0">
+                          {s.deal && <TaskFlag info={openTasks.get(s.deal.id)} />}
                           <span data-private="project" className={`truncate ${none ? "text-[var(--text-muted)] italic" : "text-[var(--text)] font-medium"}`}>{s.name}</span>
                           {s.deal && canEdit && (
                             <button onClick={(e) => { e.stopPropagation(); setRenaming(s.deal!.id); }} title="Назва проєкту"
@@ -470,10 +473,12 @@ function ProjectsKanban({ settings, rows, loading, onOpen, onMove }: {
 
 function ProjectCard({ s, color, progress, onOpen }: { s: ProjectStat; color: string; progress: Progress | null; onOpen: () => void }) {
   const paid = s.value > 0 ? Math.min(100, (s.income / s.value) * 100) : 0;
+  const tasks = useOpenTasksByLead().get(s.deal!.id);
   return (
     <div onClick={onOpen} className="relative rounded-lg bg-[var(--surface-2)] border border-white/[0.06] hover:border-white/15 hover:bg-[#1a1a1a] transition-colors cursor-pointer overflow-hidden pl-3 pr-2.5 pt-2.5 pb-2.5 md:pt-2 md:pb-2">
-      <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full" style={{ background: color }} />
+      <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full" style={{ background: tasks ? "#ef4444" : color }} />
       <div className="flex items-start gap-2">
+        {tasks && <TaskFlag info={tasks} className="mt-[5px] -mr-0.5" />}
         <p data-private="project" className="flex-1 min-w-0 text-[13px] md:text-[12px] font-semibold leading-snug line-clamp-2 text-[var(--text)]">{s.name}</p>
         {progress && <span className="shrink-0 text-[11px] font-bold tabular-nums" title="Виконано" style={{ color: progress.pct >= 60 ? "#4ade80" : progress.pct >= 30 ? "#fbbf24" : progress.pct > 0 ? "#fb923c" : "var(--text-dim)" }}>{progress.pct}%</span>}
       </div>

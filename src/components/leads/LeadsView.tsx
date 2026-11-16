@@ -27,6 +27,7 @@ import { useAdCampaigns } from "@/lib/useAdCampaigns";
 import { toastError } from "@/components/ui/toast";
 import ListPager, { usePager } from "@/components/ui/ListPager";
 import { PrivacyButton } from "@/components/ui/Privacy";
+import { TaskFlag, useOpenTasksByLead } from "@/components/tasks/TaskFlag";
 
 // Convert UTC ISO string to Europe/Warsaw (UTC+2) for datetime-local input
 function toWarsawInput(utcStr: string): string {
@@ -168,6 +169,7 @@ function LeadsViewInner({ potential = false, openNumber }: { potential?: boolean
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const openTasks = useOpenTasksByLead();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [closingLead, setClosingLead] = useState<{ lead: Lead; kind?: "win" | "loss" } | null>(null);
   const [view, setViewState] = useState<View>("list");
@@ -575,8 +577,11 @@ function LeadsViewInner({ potential = false, openNumber }: { potential?: boolean
               >
                 {/* Лід: ім'я (або «Угода #4501») + ніша */}
                 <td className="px-3 py-2">
-                  <div data-private="name" title={leadDisplayName(lead)} className={`text-[13px] font-medium truncate max-w-[240px] leading-tight ${hasRealName(lead) ? "text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
-                    {leadDisplayName(lead)}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <TaskFlag info={openTasks.get(lead.id)} />
+                    <div data-private="name" title={leadDisplayName(lead)} className={`text-[13px] font-medium truncate max-w-[240px] leading-tight ${hasRealName(lead) ? "text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+                      {leadDisplayName(lead)}
+                    </div>
                   </div>
                   {lead.niche && <div data-private="niche" className="text-[11px] text-[var(--text-muted)] truncate max-w-[160px] leading-tight mt-0.5">{lead.niche}</div>}
                 </td>

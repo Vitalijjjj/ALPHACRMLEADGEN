@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Briefcase, Building2, ChevronDown, FileText, Globe, LayoutGrid, Plus, Search, ShoppingCart, Sparkles, Store, Target, type LucideIcon,
+  Briefcase, Building2, ChevronDown, FileText, LayoutGrid, Plus, Search, ShoppingCart, Sparkles, Store, Target, type LucideIcon,
 } from "lucide-react";
 import { CURRENCIES, CURRENCY_SYMBOL } from "@/lib/currency";
 import { getFunnel, resolveStage } from "@/lib/crmSettings";
@@ -69,7 +69,6 @@ const CARD_SERVICES = ["АІ лендос", "АІ корпоративний", "
 // quick source buttons; the rest — in the dropdown
 const QUICK_SOURCES: { key: string; label: string; icon: LucideIcon; color: string; hint: string }[] = [
   { key: "Контекст", label: "Контекст", icon: Search, color: "#4285F4", hint: "Google Ads" },
-  { key: "Сайт", label: "Сайт", icon: Globe, color: "#22c55e", hint: "Заявка з сайту" },
   { key: "Таргет", label: "Таргет", icon: Target, color: "#E4405F", hint: "Реклама Meta" },
 ];
 const templateOf = (service: string) => {

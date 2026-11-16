@@ -10,6 +10,7 @@ import { fmtMoney, projectTitle } from "@/lib/finance";
 import { canNotify, type NotifyKey } from "@/lib/access";
 import { useAccess } from "@/lib/useAccess";
 import { BELL_KEY, useTaskActions } from "@/components/tasks/useTaskActions";
+import { useMyAssignee } from "@/components/tasks/TaskModal";
 import { bucketOf, fmtDue, relDue, sortOpen, type TaskItem } from "@/components/tasks/taskUtils";
 
 const WEEK = 7 * 86_400_000;
@@ -118,7 +119,10 @@ export default function NotificationsBell() {
     };
   }, [open]);
 
-  const tasks = sortOpen(q.data ?? []);
+  // only the signed-in person's tasks (owner → «Артур», Аліна → «Аліна»…)
+  const myAssignee = useMyAssignee();
+  const me = access?.owner ? myAssignee : access?.name ?? "";
+  const tasks = sortOpen((q.data ?? []).filter((t) => !!me && t.assignee === me));
   const overdue = tasks.filter((t) => bucketOf(t.deadline) === "overdue");
   const today = tasks.filter((t) => bucketOf(t.deadline) === "today");
   // «ті, які будуть» — the coming week

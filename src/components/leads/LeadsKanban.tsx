@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { TaskFlag, useOpenTasksByLead } from "@/components/tasks/TaskFlag";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { Plus, Phone, CalendarPlus, Trash2, Send } from "lucide-react";
 import { EdgeScroller } from "@/components/ui/EdgeScroll";
@@ -60,6 +61,7 @@ function Card<T extends KanbanLead>({
 }) {
   const [copied, setCopied] = useState(false);
   const named = hasRealName(lead);
+  const tasks = useOpenTasksByLead().get(lead.id);
   const side = "w-5 h-5 max-sm:w-8 max-sm:h-8 flex items-center justify-center rounded text-[var(--text-dim)] transition-colors cursor-pointer";
 
   return (
@@ -67,13 +69,16 @@ function Card<T extends KanbanLead>({
       onClick={onOpen}
       className="group relative flex rounded-lg bg-[var(--surface-2)] border border-white/[0.06] hover:border-white/15 hover:bg-[#1a1a1a] transition-colors cursor-pointer overflow-hidden"
     >
-      <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full" style={{ background: stage.color }} />
+      <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full" style={{ background: tasks ? "#ef4444" : stage.color }} />
 
       {/* Info */}
       <div className="flex-1 min-w-0 pl-2.5 pr-1 pt-2 pb-1.5 flex flex-col">
-        <p data-private="name" className={`text-[12px] max-sm:text-[14px] font-semibold leading-snug line-clamp-2 ${named ? "text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
-          {leadDisplayName(lead)}
-        </p>
+        <div className="flex items-start gap-1.5">
+          {tasks && <TaskFlag info={tasks} className="mt-[5px]" />}
+          <p data-private="name" className={`flex-1 min-w-0 text-[12px] max-sm:text-[14px] font-semibold leading-snug line-clamp-2 ${named ? "text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+            {leadDisplayName(lead)}
+          </p>
+        </div>
         <p data-private="niche" className="text-[11px] max-sm:text-[12px] leading-snug truncate mt-0.5 self-start max-w-full" style={{ color: lead.niche ? "var(--text-muted)" : "var(--text-dim)" }}>
           {lead.niche || "Ніша не вказана"}
         </p>

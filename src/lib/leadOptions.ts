@@ -112,7 +112,6 @@ export const LEAD_SOURCES: { value: string; detail?: string }[] = [
   { value: "Автопрозвон",      detail: "Назва кампанії" },
   { value: "Мессенджер" },
   { value: "Контекст" },
-  { value: "Сайт" },
   { value: "Сарафанне радіо",  detail: "Від якого клієнта" },
   { value: "Партнерка",        detail: "Хто партнер" },
 ];
