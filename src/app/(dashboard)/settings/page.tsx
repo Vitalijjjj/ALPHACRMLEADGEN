@@ -7,8 +7,8 @@ import {
   History, ArrowRight, AlertTriangle, ListPlus, Workflow, CornerDownRight, Layers, Flag, ArrowRightLeft, ListChecks, KeyRound, Bell,
 } from "lucide-react";
 import {
-  TASK_PRIORITIES, PRIORITY_META, TIMEZONES, defaultRules, newRule, newStep, ruleStageIn,
-  type AutoRule, type AutoStep, type AutoWhen, type AutoNo, type TaskPriority, type TaskSettings,
+  TASK_PRIORITIES, PRIORITY_META, TIMEZONES, defaultRules, newRule, newStep, ruleStageIn, defaultTaskTemplates,
+  type TaskTemplate, type AutoRule, type AutoStep, type AutoWhen, type AutoNo, type TaskPriority, type TaskSettings,
 } from "@/lib/taskAutomation";
 import {
   PAGE_GROUPS, FUNNEL_ACTIONS, NO_PERM, FULL_PERM, normPerm, newRoleId, NOTIFY, DEFAULT_NOTIFY,
@@ -24,6 +24,7 @@ import {
   type CrmSettings, type Funnel, type Stage, type CloseRules, type CardField, type FieldRule, type TransferProcess,
 } from "@/lib/crmSettings";
 import { toastError } from "@/components/ui/toast";
+import { TASK_ICONS } from "@/components/tasks/TaskModal";
 import { ask, askText } from "@/components/ui/dialogs";
 
 type Stats = Record<string, { total: number; stages: Record<string, number>; unknown: Record<string, number> }>;
@@ -937,6 +938,70 @@ function RuleCard({
   );
 }
 
+const TPL_COLORS = ["#22c55e", "#38bdf8", "#a78bfa", "#c084fc", "#eab308", "#f97316", "#818cf8", "#ef4444", "#2dd4bf", "#f472b6", "#C98C0A", "#94a3b8"];
+
+// quick buttons of the «Нова справа» popup: label, task title, icon, colour, priority; order by arrows
+function TaskTemplatesEditor({ list, onChange }: { list: TaskTemplate[]; onChange: (l: TaskTemplate[]) => void }) {
+  const [iconFor, setIconFor] = useState<string | null>(null);
+  const upd = (id: string, p: Partial<TaskTemplate>) => onChange(list.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= list.length) return; const a = [...list]; [a[i], a[j]] = [a[j], a[i]]; onChange(a); };
+  const add = () => onChange([...list, { id: `tt_${Math.random().toString(36).slice(2, 8)}`, label: "Нова кнопка", title: "Нова справа", icon: "check", color: TPL_COLORS[list.length % TPL_COLORS.length], priority: "MEDIUM" }]);
+  return (
+    <section className={`${card} p-3 sm:p-4 space-y-3`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--text)]">Кнопки «Нова справа»</h2>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Шаблони зверху попапу справи. Натиск підставляє назву справи і пріоритет. «Своя справа» є завжди.</p>
+        </div>
+        <button onClick={() => onChange(defaultTaskTemplates())} className="shrink-0 flex items-center gap-1 text-[11px] text-[var(--text-dim)] hover:text-[var(--text)] cursor-pointer"><RotateCcw size={11} /> Стандартні</button>
+      </div>
+      <div className="space-y-1.5">
+        {list.map((t, i) => {
+          const Icon = (TASK_ICONS[t.icon] ?? TASK_ICONS.check).icon;
+          return (
+            <div key={t.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/40 p-2 space-y-2">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                <button onClick={() => setIconFor(iconFor === t.id ? null : t.id)} title="Іконка і колір"
+                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 cursor-pointer" style={{ background: `${t.color}22`, color: t.color, boxShadow: iconFor === t.id ? `inset 0 0 0 1px ${t.color}` : undefined }}>
+                  <Icon size={16} />
+                </button>
+                <input value={t.label} onChange={(e) => upd(t.id, { label: e.target.value })} placeholder="Текст кнопки" className={`${input} sm:!w-44`} />
+                <input value={t.title} onChange={(e) => upd(t.id, { title: e.target.value })} placeholder="Назва справи" className={`${input} flex-1 min-w-[140px]`} />
+                <select value={t.priority} onChange={(e) => upd(t.id, { priority: e.target.value as TaskPriority })} className={`${input} !w-auto cursor-pointer`} style={{ color: PRIORITY_META[t.priority]?.color }}>
+                  {TASK_PRIORITIES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                </select>
+                <div className="flex items-center">
+                  <button onClick={() => move(i, -1)} disabled={i === 0} className={iconBtn} title="Вище"><ChevronUp size={14} /></button>
+                  <button onClick={() => move(i, 1)} disabled={i === list.length - 1} className={iconBtn} title="Нижче"><ChevronDown size={14} /></button>
+                  <button onClick={() => onChange(list.filter((x) => x.id !== t.id))} className={`${iconBtn} hover:!text-red-400`} title="Видалити"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              {iconFor === t.id && (
+                <div className="flex flex-wrap items-center gap-1.5 pl-1">
+                  {Object.entries(TASK_ICONS).map(([k, v]) => {
+                    const I = v.icon;
+                    return (
+                      <button key={k} onClick={() => upd(t.id, { icon: k })} title={v.label}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center border cursor-pointer"
+                        style={t.icon === k ? { borderColor: t.color, color: t.color, background: `${t.color}1a` } : { borderColor: "var(--border)", color: "var(--text-muted)" }}><I size={14} /></button>
+                    );
+                  })}
+                  <span className="w-px h-6 bg-[var(--border)] mx-1" />
+                  {TPL_COLORS.map((c) => (
+                    <button key={c} onClick={() => upd(t.id, { color: c })} className="w-6 h-6 rounded-full cursor-pointer" title={c}
+                      style={{ background: c, boxShadow: t.color === c ? `0 0 0 2px var(--surface), 0 0 0 4px ${c}` : undefined }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <button onClick={add} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border border-dashed border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] cursor-pointer"><Plus size={12} /> Додати кнопку</button>
+    </section>
+  );
+}
+
 function TasksEditor({ draft, funnel, onChange }: { draft: CrmSettings; funnel: Funnel; onChange: (t: TaskSettings) => void }) {
   const t = draft.tasks;
   const [name, setName] = useState("");
@@ -953,6 +1018,8 @@ function TasksEditor({ draft, funnel, onChange }: { draft: CrmSettings; funnel: 
 
   return (
     <div className="space-y-4">
+      <TaskTemplatesEditor list={t.templates} onChange={(templates) => onChange({ ...t, templates })} />
+
       <section className={`${card} p-3 sm:p-4 space-y-3`}>
         <h2 className="text-sm font-semibold text-[var(--text)]">Відповідальні</h2>
         <div className="flex flex-wrap items-center gap-1.5">

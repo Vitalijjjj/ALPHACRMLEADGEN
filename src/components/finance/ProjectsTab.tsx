@@ -47,7 +47,7 @@ const SERVICE_LOOK: Record<string, [LucideIcon, string, string]> = {
 };
 const PROJECT_TEMPLATES: CardOption[] = [
   { key: "", label: "Інше", icon: Plus, color: "#C98C0A" },
-  ...LEAD_SERVICES.map((sv) => { const [icon, color, label] = SERVICE_LOOK[sv] ?? [Briefcase, "#C98C0A", sv]; return { key: sv, label, icon, color }; }),
+  ...LEAD_SERVICES.filter((sv) => sv.startsWith("АІ")).map((sv) => { const [icon, color, label] = SERVICE_LOOK[sv] ?? [Briefcase, "#C98C0A", sv]; return { key: sv, label, icon, color }; }),
 ];
 const projectTemplate = (sv: string) => PROJECT_TEMPLATES.find((t) => t.key === sv) ?? PROJECT_TEMPLATES[0];
 

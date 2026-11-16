@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Briefcase, Building2, ChevronDown, FileText, LayoutGrid, Plus, ShoppingCart, Sparkles, Store, type LucideIcon,
+  Briefcase, Building2, ChevronDown, FileText, Globe, LayoutGrid, Plus, Search, ShoppingCart, Sparkles, Store, Target, type LucideIcon,
 } from "lucide-react";
 import { CURRENCIES, CURRENCY_SYMBOL } from "@/lib/currency";
 import { getFunnel, resolveStage } from "@/lib/crmSettings";
@@ -64,6 +64,14 @@ const SERVICE_META: Record<string, { icon: LucideIcon; color: string; short: str
   "Індив Інтернет магазин": { icon: Store, color: "#f59e0b", short: "Індив магазин" },
 };
 const NEW = { key: "", label: "Новий", icon: Plus, color: "#C98C0A" };
+// cards on top: only the АІ services (others stay readable on old leads)
+const CARD_SERVICES = ["АІ лендос", "АІ корпоративний", "АІ каталог"];
+// quick source buttons; the rest — in the dropdown
+const QUICK_SOURCES: { key: string; label: string; icon: LucideIcon; color: string; hint: string }[] = [
+  { key: "Контекст", label: "Контекст", icon: Search, color: "#4285F4", hint: "Google Ads" },
+  { key: "Сайт", label: "Сайт", icon: Globe, color: "#22c55e", hint: "Заявка з сайту" },
+  { key: "Таргет", label: "Таргет", icon: Target, color: "#E4405F", hint: "Реклама Meta" },
+];
 const templateOf = (service: string) => {
   const m = SERVICE_META[service];
   return m ? { key: service, label: m.short, icon: m.icon, color: m.color } : NEW;
@@ -122,7 +130,10 @@ export function LeadForm({ onSave, onCancel, initial, funnelId, edit }: LeadForm
 
   const isShop = SHOP_SERVICES.includes(data.service);
   const tpl = templateOf(data.service);
-  const templates = [NEW, ...SERVICES.map(templateOf)];
+  const templates = [NEW, ...SERVICES.filter((sv) => CARD_SERVICES.includes(sv) || sv === data.service).map(templateOf)];
+  const quick = QUICK_SOURCES.filter((q) => SOURCES.some((x) => x.value === q.key));
+  const isQuick = quick.some((q) => q.key === data.source);
+  const pickSource = (v: string) => { setCustomCampaign(false); put({ source: v, sourceDetail: "" }); };
   const source = SOURCES.find((s) => s.value === data.source);
   const trafficType = adTypeOf(data.source);
   const n = Number(data.amount.replace(/\s/g, "").replace(",", "."));
@@ -151,7 +162,7 @@ export function LeadForm({ onSave, onCancel, initial, funnelId, edit }: LeadForm
       {/* what we sell — the template of the lead */}
       <div>
         <FieldLabel>Що продаємо</FieldLabel>
-        <TemplateCards options={templates} value={tpl.key} onChange={(k) => put({ service: k, paymentSystem: "", paymentSystemCustom: "" })} />
+        <TemplateCards options={templates} value={tpl.key} cols="grid-cols-2 sm:grid-cols-4" onChange={(k) => put({ service: k, paymentSystem: "", paymentSystemCustom: "" })} />
       </div>
 
       {/* contact: phone · telegram — one line */}
@@ -171,14 +182,17 @@ export function LeadForm({ onSave, onCancel, initial, funnelId, edit }: LeadForm
         </label>
       </div>
 
-      {/* source + campaign */}
-      <div className={`grid grid-cols-1 ${source?.detail ? "sm:grid-cols-2" : ""} gap-2`}>
-        <div>
-          <FieldLabel>Джерело</FieldLabel>
-          <Select value={data.source} placeholder="— звідки лід —"
-            onChange={(v) => { setCustomCampaign(false); put({ source: v, sourceDetail: "" }); }}
-            options={SOURCES.map((s) => ({ value: s.value, label: s.value }))} />
+      {/* source: quick buttons + the rest in a dropdown */}
+      <div>
+        <FieldLabel>Звідки лід</FieldLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,3fr)_minmax(0,1.3fr)] gap-1.5">
+          <TemplateCards options={quick} value={isQuick ? data.source : "__none"} cols="grid-cols-3" onChange={(k) => pickSource(k === data.source ? "" : k)} />
+          <Select value={isQuick ? "" : data.source} placeholder="Інше джерело…" onChange={pickSource}
+            accent={isQuick ? undefined : "var(--accent)"}
+            options={SOURCES.filter((x) => !quick.some((q) => q.key === x.value)).map((x) => ({ value: x.value, label: x.value }))} />
         </div>
+      </div>
+      <div className={`grid grid-cols-1 gap-2 ${source?.detail ? "" : "hidden"}`}>
         {source?.detail && (
           <div>
             <FieldLabel>{trafficType ? "Кампанія" : source.detail}</FieldLabel>

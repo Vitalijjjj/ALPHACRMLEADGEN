@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  BarChart3, Bell, CalendarClock, FileText, PenLine, Phone, Presentation, Send, type LucideIcon,
+  BarChart3, Bell, CalendarClock, CheckSquare, FileSignature, FileText, Handshake, Mail, MessageCircle, PenLine, Phone, Presentation, Send, Star, Video, type LucideIcon,
 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { toastError } from "@/components/ui/toast";
@@ -22,15 +22,24 @@ export interface NewTask {
   status: "TODO";
 }
 
-const TEMPLATES: { key: string; label: string; icon: LucideIcon; color: string; priority: TaskPriority }[] = [
-  { key: "Перезвонити", label: "Перезвонити", icon: Phone, color: "#22c55e", priority: "HIGH" },
-  { key: "Запушити клієнта", label: "Запушити", icon: Send, color: "#38bdf8", priority: "HIGH" },
-  { key: "Надіслати КП", label: "Надіслати КП", icon: FileText, color: "#a78bfa", priority: "HIGH" },
-  { key: "Провести КП", label: "Провести КП", icon: Presentation, color: "#c084fc", priority: "URGENT" },
-  { key: "Надіслати звіт", label: "Надіслати звіт", icon: BarChart3, color: "#eab308", priority: "MEDIUM" },
-  { key: "Назначити зустріч", label: "Зустріч", icon: CalendarClock, color: "#818cf8", priority: "HIGH" },
-  { key: "", label: "Своя справа", icon: PenLine, color: "#C98C0A", priority: "MEDIUM" },
-];
+// icons of the task templates (key is stored in the settings)
+export const TASK_ICONS: Record<string, { icon: LucideIcon; label: string }> = {
+  phone: { icon: Phone, label: "Дзвінок" },
+  send: { icon: Send, label: "Пуш" },
+  file: { icon: FileText, label: "Документ" },
+  presentation: { icon: Presentation, label: "Презентація" },
+  chart: { icon: BarChart3, label: "Звіт" },
+  contract: { icon: FileSignature, label: "Договір" },
+  calendar: { icon: CalendarClock, label: "Зустріч" },
+  video: { icon: Video, label: "Відео" },
+  message: { icon: MessageCircle, label: "Повідомлення" },
+  mail: { icon: Mail, label: "Пошта" },
+  deal: { icon: Handshake, label: "Угода" },
+  star: { icon: Star, label: "Важливе" },
+  check: { icon: CheckSquare, label: "Справа" },
+};
+const CUSTOM = { key: "", label: "Своя справа", title: "", icon: PenLine, color: "#C98C0A", priority: "MEDIUM" as TaskPriority };
+
 const HOURS = ["09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"];
 const WD = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 const REMIND: { key: string; label: string; min: number | null }[] = [
@@ -62,8 +71,12 @@ export default function TaskModal({ open, onClose, onCreate, title: heading = "�
   const { settings } = useCrmSettings();
   const me = useMyAssignee();
   const people = settings.tasks.assignees;
+  const TEMPLATES = [
+    ...settings.tasks.templates.map((t) => ({ key: t.id, label: t.label, title: t.title, icon: (TASK_ICONS[t.icon] ?? TASK_ICONS.check).icon, color: t.color, priority: t.priority })),
+    CUSTOM,
+  ];
   const [tpl, setTpl] = useState(TEMPLATES[0].key);
-  const [title, setTitle] = useState(TEMPLATES[0].key);
+  const [title, setTitle] = useState(TEMPLATES[0].title);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("13:00");
@@ -78,7 +91,7 @@ export default function TaskModal({ open, onClose, onCreate, title: heading = "�
     const [d, t] = (initialDeadline ?? "").split("T");
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     setTpl(TEMPLATES[0].key);
-    setTitle(TEMPLATES[0].key);
+    setTitle(TEMPLATES[0].title);
     setPriority(TEMPLATES[0].priority);
     setDescription("");
     setDate(d || localDate(tomorrow));
@@ -102,9 +115,9 @@ export default function TaskModal({ open, onClose, onCreate, title: heading = "�
   }, []);
 
   function pickTpl(k: string) {
-    const t = TEMPLATES.find((x) => x.key === k)!;
+    const t = TEMPLATES.find((x) => x.key === k) ?? CUSTOM;
     setTpl(k);
-    setTitle(k);
+    setTitle(t.title);
     setPriority(t.priority);
   }
 

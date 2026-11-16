@@ -56,7 +56,49 @@ export interface AutoRule {
   calendar: boolean;  // tasks get a «Додати в календар» button
 }
 
+// quick buttons of the «Нова справа» popup (Налаштування → Задачі)
+export interface TaskTemplate {
+  id: string;
+  label: string;    // on the button
+  title: string;    // what the task is called
+  icon: string;     // key of TASK_ICONS (client)
+  color: string;
+  priority: TaskPriority;
+}
+
+export function defaultTaskTemplates(): TaskTemplate[] {
+  return [
+    { id: "tt_call", label: "Перезвонити", title: "Перезвонити", icon: "phone", color: "#22c55e", priority: "HIGH" },
+    { id: "tt_push", label: "Запушити", title: "Запушити клієнта", icon: "send", color: "#38bdf8", priority: "HIGH" },
+    { id: "tt_kp", label: "Надіслати КП", title: "Надіслати КП", icon: "file", color: "#a78bfa", priority: "HIGH" },
+    { id: "tt_kp2", label: "Провести КП", title: "Провести КП", icon: "presentation", color: "#c084fc", priority: "URGENT" },
+    { id: "tt_report", label: "Надіслати звіт", title: "Надіслати звіт", icon: "chart", color: "#eab308", priority: "MEDIUM" },
+    { id: "tt_contract", label: "Договір", title: "Надіслати договір", icon: "contract", color: "#f97316", priority: "HIGH" },
+    { id: "tt_meet", label: "Призначена зустріч", title: "Призначена зустріч", icon: "calendar", color: "#818cf8", priority: "HIGH" },
+  ];
+}
+
+function normTemplates(raw: unknown): TaskTemplate[] {
+  if (!Array.isArray(raw)) return defaultTaskTemplates();
+  const pr = new Set(["LOW", "MEDIUM", "HIGH", "URGENT"]);
+  return raw.flatMap((x, i): TaskTemplate[] => {
+    if (!x || typeof x !== "object") return [];
+    const o = x as Record<string, unknown>;
+    const label = typeof o.label === "string" ? o.label.trim() : "";
+    if (!label) return [];
+    return [{
+      id: typeof o.id === "string" && o.id ? o.id : `tt_${i}`,
+      label,
+      title: typeof o.title === "string" && o.title.trim() ? o.title.trim() : label,
+      icon: typeof o.icon === "string" ? o.icon : "check",
+      color: typeof o.color === "string" && /^#[0-9a-f]{6}$/i.test(o.color) ? o.color : "#C98C0A",
+      priority: (typeof o.priority === "string" && pr.has(o.priority) ? o.priority : "MEDIUM") as TaskPriority,
+    }];
+  });
+}
+
 export interface TaskSettings {
+  templates: TaskTemplate[];
   assignees: string[];
   defaultAssignee: string; // automatic tasks go to this person (or to whoever had the last task of the lead)
   timezone: string;        // working days / «о 13:00» are counted in this timezone
@@ -157,7 +199,7 @@ export function defaultRules(): AutoRule[] {
 }
 
 export function defaultTaskSettings(): TaskSettings {
-  return { assignees: ["Артур"], defaultAssignee: "Артур", timezone: "Europe/Warsaw", rules: defaultRules() };
+  return { templates: defaultTaskTemplates(), assignees: ["Артур"], defaultAssignee: "Артур", timezone: "Europe/Warsaw", rules: defaultRules() };
 }
 
 export function newRule(funnelId: string, stageId: string): AutoRule {
@@ -240,7 +282,7 @@ export function normalizeTaskSettings(raw: unknown): TaskSettings {
     : defaultRules();
   const defaultAssignee = typeof t.defaultAssignee === "string" && assignees.includes(t.defaultAssignee) ? t.defaultAssignee : assignees[0] ?? "";
   const timezone = typeof t.timezone === "string" && isValidTz(t.timezone) ? t.timezone : "Europe/Warsaw";
-  return { assignees, defaultAssignee, timezone, rules };
+  return { templates: normTemplates(t.templates), assignees, defaultAssignee, timezone, rules };
 }
 
 function isValidTz(tz: string): boolean {
