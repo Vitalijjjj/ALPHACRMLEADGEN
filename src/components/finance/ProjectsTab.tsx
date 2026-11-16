@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useEdgeScroll } from "@/components/ui/EdgeScroll";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { ArrowDown, ArrowUp, Briefcase, ChevronLeft, Columns3, FileSpreadsheet, List, Pencil, Plus, Search, Trash2, UserPlus, UserRound, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Briefcase, Building2, ChevronLeft, Columns3, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Plus, Search, ShoppingCart, Sparkles, Store, Trash2, UserPlus, UserRound, X, type LucideIcon } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { ask } from "@/components/ui/dialogs";
 import { toast, toastError } from "@/components/ui/toast";
@@ -23,6 +23,8 @@ import { pct, projectStats, usePnlData, type ProjectStat } from "@/components/fi
 import { groupNum } from "@/lib/numInput";
 import { projectProgress, type Progress } from "@/lib/projectProgress";
 import { PrivacyButton } from "@/components/ui/Privacy";
+import { CUR_SYMBOL, CurrencyButtons, FieldLabel, FormFooter, Panel, TemplateCards, cellLabelCls, fieldCls, type CardOption } from "@/components/ui/formKit";
+import { LEAD_SERVICES } from "@/lib/leadOptions";
 
 type SortKey = "name" | "value" | "income" | "left" | "costs" | "cash" | "margin" | "progress";
 type Filter = "deals" | "debt" | "sheet";
@@ -33,14 +35,30 @@ interface ContactHit extends ContactFields { id: string; number: number; name: s
 
 const paymentsFunnel = (s: CrmSettings) => s.funnels.find((f) => f.payments) ?? null;
 
+// «Що робимо» cards of a new project (the deal's service)
+const SERVICE_LOOK: Record<string, [LucideIcon, string, string]> = {
+  "АІ лендос": [Sparkles, "#a78bfa", "АІ лендос"],
+  "АІ корпоративний": [Building2, "#c084fc", "АІ корпоративний"],
+  "АІ каталог": [LayoutGrid, "#e879f9", "АІ каталог"],
+  "ШБ лендинг": [FileText, "#38bdf8", "ШБ лендинг"],
+  "ШБ Корпоративний": [Briefcase, "#22d3ee", "ШБ корпоративний"],
+  "ШБ Інтернет магазин": [ShoppingCart, "#2dd4bf", "ШБ магазин"],
+  "Індив Інтернет магазин": [Store, "#f59e0b", "Індив магазин"],
+};
+const PROJECT_TEMPLATES: CardOption[] = [
+  { key: "", label: "Інше", icon: Plus, color: "#C98C0A" },
+  ...LEAD_SERVICES.map((sv) => { const [icon, color, label] = SERVICE_LOOK[sv] ?? [Briefcase, "#C98C0A", sv]; return { key: sv, label, icon, color }; }),
+];
+const projectTemplate = (sv: string) => PROJECT_TEMPLATES.find((t) => t.key === sv) ?? PROJECT_TEMPLATES[0];
+
 // Create a deal in «Операційка» (the only place projects live). Returns the new deal.
-async function createDeal(settings: CrmSettings, data: { name: string; projectName?: string; amount: number | null; currency: string; contact?: ContactFields }): Promise<DealRow | null> {
+async function createDeal(settings: CrmSettings, data: { name: string; projectName?: string; amount: number | null; currency: string; service?: string; contact?: ContactFields }): Promise<DealRow | null> {
   const f = paymentsFunnel(settings);
   if (!f) { toastError("Увімкни «Оплати в угодах» у воронці «Операційка» (Налаштування)"); return null; }
   const res = await fetch("/api/leads", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...data.contact, name: data.name, projectName: data.projectName ?? null, amount: data.amount, currency: data.currency, funnelId: f.id, status: f.stages[0]?.id }),
+    body: JSON.stringify({ ...data.contact, name: data.name, projectName: data.projectName ?? null, amount: data.amount, currency: data.currency, service: data.service || null, funnelId: f.id, status: f.stages[0]?.id }),
   });
   const out = await res.json().catch(() => ({}));
   if (!res.ok) { toastError(out.error ?? "Не вдалося створити угоду"); return null; }
@@ -482,8 +500,10 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [nc, setNc] = useState({ name: "", phone: "", telegram: "", email: "" });
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("EUR");
+  const [service, setService] = useState("");
   const [busy, setBusy] = useState(false);
   const f = paymentsFunnel(settings);
+  const tpl = projectTemplate(service);
   const needle = q.trim();
   const hitsQ = useQuery({
     queryKey: ["contact-search", needle],
@@ -517,7 +537,7 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
         ? { phone: picked.phone, telegram: picked.telegram, instagram: picked.instagram, email: picked.email, messenger: picked.messenger, payer: picked.payer }
         : creating ? { phone: nc.phone.trim() || null, telegram: nc.telegram.trim() || null, email: nc.email.trim() || null } : {};
       // the deal's name is the contact; the project name is separate (empty → «Проєкт #N»)
-      const deal = await createDeal(settings, { name: contactName || name.trim(), projectName: name.trim() || undefined, amount: Number(amount.replace(/\s/g, "").replace(",", ".")) || null, currency, contact });
+      const deal = await createDeal(settings, { name: contactName || name.trim(), projectName: name.trim() || undefined, amount: Number(amount.replace(/\s/g, "").replace(",", ".")) || null, currency, service, contact });
       if (!deal) return;
       // existing contact → link the new project to its deal, so the history shows up in «Пов'язані угоди»
       if (picked) await fetch(`/api/leads/${deal.id}/links`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetId: picked.id }) }).catch(() => {});
@@ -530,15 +550,19 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <Modal open onClose={onClose} title="Новий проєкт" size="md">
+    <Modal open onClose={onClose} title="Новий проєкт" size="lg">
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className={label}>Назва проєкту</label>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className={input} placeholder="Сайт для Status Home · порожньо → «Проєкт #N»" />
+          <FieldLabel>Що робимо</FieldLabel>
+          <TemplateCards options={PROJECT_TEMPLATES} value={service} onChange={setService} />
         </div>
 
         <div>
-          <label className={label}>Контакт</label>
+          <FieldLabel>Назва проєкту</FieldLabel>
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className={`${fieldCls} text-[15px] font-semibold`} placeholder="Сайт для Status Home · порожньо → «Проєкт #N»" />
+        </div>
+
+        <Panel icon={UserRound} title="Клієнт" color={tpl.color} right={picked ? "існуючий контакт" : creating ? "новий контакт" : "пошук або новий"}>
           {picked ? (
             <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/[0.06]">
               <UserRound size={14} className="text-[var(--accent)] shrink-0" />
@@ -594,26 +618,19 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
               )}
             </div>
           )}
-        </div>
+        </Panel>
 
-        <div>
-          <label className={label}>Вартість (сума угоди)</label>
-          <div className="flex gap-2">
-            <input value={amount} onChange={(e) => setAmount(groupNum(e.target.value))} inputMode="decimal" placeholder="0" className={`${input} tabular-nums`} />
-            <div className="flex p-0.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] shrink-0">
-              {CURRENCIES.map((c) => (
-                <button type="button" key={c} onClick={() => setCurrency(c)}
-                  className={`px-2.5 rounded-md text-xs font-semibold cursor-pointer transition-colors ${currency === c ? "bg-[var(--accent)] text-black" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}>{c}</button>
-              ))}
-            </div>
-          </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] rounded-xl border border-[var(--border)] bg-[var(--surface-2)] focus-within:border-[var(--accent)]/60 transition-colors overflow-hidden">
+          <label className="px-3 py-2 min-w-0">
+            <span className={cellLabelCls}>Вартість проєкту</span>
+            <input value={amount} onChange={(e) => setAmount(groupNum(e.target.value))} inputMode="decimal" placeholder="0"
+              className="w-full bg-transparent text-[26px] leading-tight sm:text-xl font-bold tabular-nums outline-none placeholder:text-[var(--text-dim)]" style={{ color: tpl.color }} />
+          </label>
+          <CurrencyButtons list={CURRENCIES} value={currency} onChange={setCurrency} />
         </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl text-sm border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer">Скасувати</button>
-          <button type="submit" disabled={busy || !f} className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-semibold text-black cursor-pointer disabled:opacity-50 hover:brightness-110" style={{ background: "var(--accent)" }}>
-            {busy ? "Створюю…" : "Створити проєкт"}
-          </button>
-        </div>
+        <FormFooter onCancel={onClose} busy={busy} disabled={!f} color={tpl.color}>
+          {busy ? "Створюю…" : <>Створити проєкт{service ? ` · ${tpl.label}` : ""}{amount ? ` · ${amount} ${CUR_SYMBOL[currency] ?? ""}` : ""}</>}
+        </FormFooter>
       </form>
     </Modal>
   );

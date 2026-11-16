@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import CalendarModal from "@/components/leads/CalendarModal";
 import {
-  COMMUNICATION_CHANNELS, CHANNEL_ACCENT, PUSH_STAGES, LEAD_SERVICES, PAYMENT_SYSTEMS, UPSELL_SERVICES,
+  COMMUNICATION_CHANNELS, CHANNEL_ACCENT, PUSH_STAGES, LEAD_SERVICES, PAYMENT_SYSTEMS,
   leadDisplayName, hasRealName,
 } from "@/lib/leadOptions";
 import MessengerIcon, { messengerHref, preferredMessenger } from "@/components/ui/MessengerIcon";
@@ -21,7 +21,7 @@ import { CURRENCIES, CURRENCY_SYMBOL, CURRENCY_LABEL, asCurrency, formatMoney, t
 import CloseLeadModal from "@/components/leads/CloseLeadModal";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import TaskComposer, { type NewTask } from "@/components/tasks/TaskComposer";
+import TaskModal, { type NewTask } from "@/components/tasks/TaskModal";
 import TaskRow from "@/components/tasks/TaskRow";
 import { useTaskActions, BELL_KEY } from "@/components/tasks/useTaskActions";
 import { useStageGuard } from "@/components/tasks/useStageGuard";
@@ -569,6 +569,7 @@ export default function LeadDrawer({
   const tabsRef = useRef<HTMLDivElement>(null);
   useDragScroll(tabsRef, !!lead);
   const [composer, setComposer] = useState<"note" | "task" | "transfer">("note");
+  const [taskOpen, setTaskOpen] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
   const [transferred, setTransferred] = useState<{ id: string; number: number; name: string } | null>(null);
   const [linking, setLinking] = useState(false);
@@ -1005,28 +1006,6 @@ export default function LeadDrawer({
                       </div>
                     </div>
       );
-      case "usedServices": return (
-        <div className="py-1.5">
-                      <div className="text-[10px] uppercase tracking-wide text-[var(--text-dim)] mb-1">{label}</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {UPSELL_SERVICES.map((sv) => {
-                          const on = lead.usedServices.includes(sv);
-                          return (
-                            <button
-                              key={sv}
-                              onClick={() => patch({ usedServices: on ? lead.usedServices.filter((x) => x !== sv) : [...lead.usedServices, sv] })}
-                              className="px-2 py-0.5 text-[11px] rounded-md border transition-colors cursor-pointer"
-                              style={on
-                                ? { color: "var(--accent)", borderColor: "var(--accent)", background: "var(--accent-subtle)" }
-                                : { color: "var(--text-dim)", borderColor: "var(--border)" }}
-                            >
-                              {on && "✓ "}{sv}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-      );
       case "pushStage": return (
         <div className="py-1.5">
                       <div className="text-[10px] uppercase tracking-wide text-[var(--text-dim)] mb-1">{label}</div>
@@ -1457,7 +1436,7 @@ export default function LeadDrawer({
                       {([["note", "Коментар", <MessageSquare key="n" size={12} />], ["task", "Справа", <CheckSquare key="t" size={12} />], ["transfer", "Передати", <Workflow key="b" size={12} />]] as const).map(([k, l, icon]) => (
                         <button
                           key={k}
-                          onClick={() => setComposer(k)}
+                          onClick={() => (k === "task" ? setTaskOpen(true) : setComposer(k))}
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer ${composer === k ? "bg-[var(--accent-subtle)] text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
                         >
                           {icon}{l}
@@ -1479,7 +1458,6 @@ export default function LeadDrawer({
                         </button>
                       </div>
                     )}
-                    {composer === "task" && <TaskComposer onCreate={createTask} autoFocus />}
                     {composer === "transfer" && (() => {
                       const procs = settings.processes.filter((p) => p.fromFunnelId === funnel.id);
                       return (
@@ -1552,7 +1530,7 @@ export default function LeadDrawer({
                     </div>
                     {openTasks.length === 0 && upcoming.length === 0 ? (
                       <button
-                        onClick={() => setComposer("task")}
+                        onClick={() => setTaskOpen(true)}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left cursor-pointer"
                         style={{ background: "rgba(201,140,10,0.08)", border: "1px dashed rgba(201,140,10,0.35)" }}
                       >
@@ -1687,10 +1665,14 @@ export default function LeadDrawer({
 
             {tab === "tasks" && (
               <div className="p-4 sm:p-6 max-w-3xl space-y-4">
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Нова справа</div>
-                  <TaskComposer onCreate={createTask} />
-                </div>
+                <button onClick={() => setTaskOpen(true)}
+                  className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-left cursor-pointer border border-dashed border-[var(--accent)]/40 bg-[var(--accent)]/[0.06] hover:bg-[var(--accent)]/[0.1] transition-colors">
+                  <span className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--accent)]/15 text-[var(--accent)] shrink-0"><Plus size={16} /></span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-[var(--text)]">Додати справу</span>
+                    <span className="block text-[11px] text-[var(--text-dim)]">Перезвонити, запушити, КП, зустріч — з датою, пріоритетом і відповідальним</span>
+                  </span>
+                </button>
                 <div className="space-y-1.5">
                   <h3 className="text-sm font-semibold text-[var(--text)]">В роботі · {openTasks.length}</h3>
                   {openTasks.length === 0 && <p className="text-sm text-[var(--text-dim)]">Немає запланованих справ</p>}
@@ -1818,6 +1800,8 @@ export default function LeadDrawer({
         </div>
       </Modal>
 
+      <TaskModal open={taskOpen} onClose={() => setTaskOpen(false)} onCreate={createTask}
+        subtitle={lead ? `${funnel.payments ? projectTitle(lead) : leadDisplayName(lead)} · #${lead.number}` : undefined} />
     </>
   );
 }

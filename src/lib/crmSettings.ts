@@ -82,7 +82,6 @@ export const BUILTIN_FIELDS: { key: string; label: string; section: string }[] =
   { key: "paymentSystem", label: "Платіжна система", section: "project" },
   { key: "projectDeadline", label: "Дедлайн проєкту", section: "project" },
   { key: "extraLang", label: "Додаткова мова", section: "project" },
-  { key: "usedServices", label: "Клієнт використовує", section: "project" },
   { key: "caseUrl", label: "Посилання на готовий проєкт", section: "project" },
   { key: "pushStage", label: "Етап пушу", section: "push" },
   { key: "pushAt", label: "Дата пушу", section: "push" },

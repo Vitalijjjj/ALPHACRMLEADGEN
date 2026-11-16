@@ -8,6 +8,7 @@ import { Check, Copy, CopyCheck, ExternalLink, FolderPlus, Gem, Globe, Link2, Ma
 import { PrivacyButton } from "@/components/ui/Privacy";
 import { Modal } from "@/components/ui/modal";
 import { toast, toastError } from "@/components/ui/toast";
+import { ChipRow, FieldLabel, FormFooter, cellLabelCls, fieldCls } from "@/components/ui/formKit";
 
 interface CaseRow {
   id: string; free: boolean; number: number | null; title: string; client: string; niche: string | null; geo: string | null; service: string | null;
@@ -223,25 +224,49 @@ function CaseForm({ row, niches, onClose, onSaved }: { row: CaseRow | null; nich
       toast({ kind: "success", title: row ? "Кейс збережено" : "Кейс додано", duration: 1800 });
     } catch (err) { toastError((err as Error).message); } finally { setBusy(false); }
   }
+  const known = [...new Set([...niches, ...(niche ? [niche] : [])])].filter(Boolean).slice(0, 14);
+  const color = niche ? colorOf(niche) : "#C98C0A";
   return (
-    <Modal open onClose={onClose} title={row ? "Кейс" : "Додати кейс"} size="sm">
-      <form onSubmit={save} className="space-y-3">
-        <label className="block"><span className="block text-xs text-[var(--text-muted)] mb-1">Посилання на готовий сайт</span>
-          <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="site.com" className={input} /></label>
-        <label className="block"><span className="block text-xs text-[var(--text-muted)] mb-1">Назва</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Сайт для барбершопу" className={input} /></label>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block"><span className="block text-xs text-[var(--text-muted)] mb-1">Ніша</span>
-            <input value={niche} onChange={(e) => setNiche(e.target.value)} list="case-niches" placeholder="Барбершоп" className={input} />
-            <datalist id="case-niches">{niches.map((x) => <option key={x} value={x} />)}</datalist></label>
-          <label className="block"><span className="block text-xs text-[var(--text-muted)] mb-1">Місто / країна</span>
-            <input value={geo} onChange={(e) => setGeo(e.target.value)} placeholder="Київ" className={input} /></label>
+    <Modal open onClose={onClose} title={row ? "Кейс" : "Додати кейс"} size="md">
+      <form onSubmit={save} className="space-y-4">
+        {/* link — the main thing, one line with a preview of the host */}
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] focus-within:border-[var(--accent)]/60 transition-colors overflow-hidden">
+          <label className="flex items-center gap-2.5 px-3 py-2">
+            <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}1f`, color }}><Globe size={16} /></span>
+            <span className="min-w-0 flex-1">
+              <span className={cellLabelCls}>Посилання на готовий сайт</span>
+              <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="site.com"
+                className="w-full bg-transparent text-lg font-semibold text-[var(--text)] outline-none placeholder:text-[var(--text-dim)]" />
+            </span>
+            {url.trim() && <a href={/^https?:/i.test(url) ? url : `https://${url.trim()}`} target="_blank" rel="noopener noreferrer" title="Відкрити" className="p-1.5 rounded-lg text-[var(--text-dim)] hover:text-[var(--text)] hover:bg-white/[0.05]"><ExternalLink size={14} /></a>}
+          </label>
         </div>
+
+        <div>
+          <FieldLabel>Назва</FieldLabel>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Сайт для барбершопу" className={fieldCls} />
+        </div>
+
+        <div>
+          <FieldLabel>Ніша</FieldLabel>
+          {known.length > 0 && (
+            <div className="mb-2"><ChipRow options={known.map((x) => ({ key: x, label: x, color: colorOf(x) }))} value={niche} onChange={(k) => setNiche(k === niche ? "" : k)} /></div>
+          )}
+          <input value={niche} onChange={(e) => setNiche(e.target.value)} placeholder={known.length ? "або впиши нову…" : "Барбершоп"} className={fieldCls} />
+        </div>
+
+        <div>
+          <FieldLabel>Місто / країна</FieldLabel>
+          <div className="relative">
+            <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-dim)]" />
+            <input value={geo} onChange={(e) => setGeo(e.target.value)} placeholder="Київ" className={`${fieldCls} pl-8`} />
+          </div>
+        </div>
+
         <p className="text-[11px] text-[var(--text-dim)]">Без проєкту кейс просто лежить у списку — потім його можна зв&apos;язати з проєктом або створити новий.</p>
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="h-9 px-3 rounded-xl text-sm text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer">Скасувати</button>
-          <button disabled={busy} className="h-9 px-4 rounded-xl text-sm font-semibold text-black cursor-pointer hover:brightness-110 disabled:opacity-50" style={{ background: "var(--accent)" }}>{row ? "Зберегти" : "Додати"}</button>
-        </div>
+        <FormFooter onCancel={onClose} busy={busy} color={color}>
+          {busy ? "Зберігаю…" : row ? "Зберегти" : <>Додати кейс{url.trim() ? ` · ${host(url.trim())}` : ""}</>}
+        </FormFooter>
       </form>
     </Modal>
   );

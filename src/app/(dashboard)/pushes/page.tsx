@@ -6,6 +6,7 @@ import { Check, Copy, CopyPlus, MessageSquareText, Pencil, Plus, Search, Tag, Tr
 import { Modal } from "@/components/ui/modal";
 import { ask } from "@/components/ui/dialogs";
 import { toastError } from "@/components/ui/toast";
+import { FormFooter } from "@/components/ui/formKit";
 
 interface PushTemplate {
   id: string;
@@ -186,6 +187,7 @@ function PushModal({ item, copyOf, categories, defaultCat, onClose, onSaved }: {
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const list = [...new Set([...(categories.length ? categories : ["Пуші", "Клієнти"]), ...(category ? [category] : [])])];
+  const catColor = colorOf(category || null);
   const label = "block text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)] mb-1.5";
   const field = "w-full px-3 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]";
 
@@ -234,17 +236,18 @@ function PushModal({ item, copyOf, categories, defaultCat, onClose, onSaved }: {
           <span className={label}>Назва</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} className={field} placeholder="Напр. Нагадування після дзвінка" />
         </div>
-        <div>
-          <div className="flex items-center mb-1.5"><span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)] mr-auto">Текст повідомлення</span><span className="text-[10px] text-[var(--text-dim)] tabular-nums">{text.length} симв.</span></div>
+        <div className="rounded-xl border bg-[var(--surface-2)] transition-colors overflow-hidden" style={{ borderColor: text.trim() ? `${catColor}55` : "var(--border)" }}>
+          <div className="flex items-center gap-2 px-3 pt-2">
+            <MessageSquareText size={12} style={{ color: catColor }} />
+            <span className="text-[9px] uppercase tracking-wider text-[var(--text-dim)] mr-auto">Текст повідомлення</span>
+            <span className="text-[10px] text-[var(--text-dim)] tabular-nums">{text.length} симв.</span>
+          </div>
           <textarea autoFocus={!item} value={text} onChange={(e) => setText(e.target.value)} rows={9} placeholder="Текст, який копіюватимеш клієнту…"
-            className={`${field} resize-y min-h-[160px] leading-relaxed`} />
+            className="w-full px-3 pb-3 pt-1.5 bg-transparent text-sm text-[var(--text)] outline-none resize-y min-h-[180px] leading-relaxed placeholder:text-[var(--text-dim)]" />
         </div>
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer">Скасувати</button>
-          <button type="submit" disabled={busy} className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-semibold text-black cursor-pointer disabled:opacity-50 hover:brightness-110" style={{ background: "var(--accent)" }}>
-            {busy ? "Зберігаю…" : item ? "Зберегти" : "Створити заготовку"}
-          </button>
-        </div>
+        <FormFooter onCancel={onClose} busy={busy} color={catColor}>
+          {busy ? "Зберігаю…" : item ? "Зберегти" : <>Створити заготовку{category ? ` · ${category}` : ""}</>}
+        </FormFooter>
       </form>
     </Modal>
   );

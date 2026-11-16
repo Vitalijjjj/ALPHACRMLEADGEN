@@ -4,7 +4,7 @@
 // the server maps it to Prisma (src/lib/leadFilterServer.ts).
 
 import {
-  LEAD_SOURCES, LEAD_SERVICES, COMMUNICATION_CHANNELS, PAYMENT_SYSTEMS, UPSELL_SERVICES, PUSH_STAGES, CALENDAR_STATUSES,
+  LEAD_SOURCES, LEAD_SERVICES, COMMUNICATION_CHANNELS, PAYMENT_SYSTEMS, PUSH_STAGES, CALENDAR_STATUSES,
 } from "@/lib/leadOptions";
 
 export type AmountOp = "eq" | "gt" | "lt" | "range";
@@ -56,7 +56,6 @@ export const FILTER_FIELDS: FilterFieldDef[] = [
   { key: "paymentSystems", label: "Платіжна система", section: "lead", type: "multi", options: PAYMENT_SYSTEMS },
   { key: "hasExtraLang", label: "Додаткова мова", section: "lead", type: "bool" },
   { key: "languages", label: "Мови", section: "lead", type: "text" },
-  { key: "usedServices", label: "Клієнт використовує", section: "lead", type: "multi", options: UPSELL_SERVICES },
   { key: "projectDeadline", label: "Дедлайн проєкту", section: "lead", type: "text" },
   // Контакт
   { key: "phone", label: "Телефон", section: "contact", type: "text", placeholder: "Можна кінець номера, напр. 4501" },

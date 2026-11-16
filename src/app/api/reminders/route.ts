@@ -3,7 +3,6 @@ import { leadDisplayName } from "@/lib/leadOptions";
 import { formatMoney } from "@/lib/currency";
 import { db } from "@/lib/db";
 
-const ALL_UPSELL = ["Google Ads", "Target Ads", "SEO", "Google Maps", "Branding", "TikTok Ads", "Graphic Design"];
 
 async function sendTelegram(text: string) {
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -75,7 +74,6 @@ export async function GET(_req: NextRequest) {
   });
 
   for (const lead of leadsPush) {
-    const upsell = ALL_UPSELL.filter((s) => !lead.usedServices.includes(s));
     const pushDate = lead.pushAt
       ? lead.pushAt.toLocaleString("uk-UA", { timeZone: "Europe/Warsaw", dateStyle: "short", timeStyle: "short" })
       : "—";
@@ -93,9 +91,6 @@ export async function GET(_req: NextRequest) {
       lead.projectDeadline ? `<b>Термін:</b> ${lead.projectDeadline}` : null,
       lead.siteStructure   ? `\n<b>Структура сайту:</b>\n${lead.siteStructure}` : null,
       lead.pushComment     ? `\n<b>💬 Коментар до пушу:</b>\n${lead.pushComment}` : null,
-      ``,
-      `<b>Рекомендовано допродати:</b>`,
-      upsell.length > 0 ? upsell.map((s) => `• ${s}`).join("\n") : "—",
     ];
 
     const message = lines.filter((l) => l !== null).join("\n");

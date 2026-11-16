@@ -1,20 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Briefcase, Building2, ChevronDown, FileText, LayoutGrid, Plus, ShoppingCart, Sparkles, Store, type LucideIcon,
+} from "lucide-react";
 import { CURRENCIES, CURRENCY_SYMBOL } from "@/lib/currency";
 import { getFunnel, resolveStage } from "@/lib/crmSettings";
 import { cleanPhone } from "@/lib/leadFilter";
 import { useCrmSettings } from "@/lib/useCrmSettings";
-import { PAYMENT_SYSTEMS, UPSELL_SERVICES, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS } from "@/lib/leadOptions";
+import { PAYMENT_SYSTEMS, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS } from "@/lib/leadOptions";
 import { useAdCampaigns } from "@/lib/useAdCampaigns";
 import { groupNum } from "@/lib/numInput";
 import { useLeadSources } from "@/lib/useLeadSources";
+import Select from "@/components/finance/Select";
+import { ChipRow, CurrencyButtons, FieldLabel, FormFooter, TemplateCards, cellLabelCls, fieldCls } from "@/components/ui/formKit";
 
 interface LeadFormProps {
   onSave: (data: LeadFormData) => Promise<void>;
   onCancel: () => void;
   initial?: Partial<LeadFormData>;
-  funnelId?: string | null; // stages in the «Статус» select come from this funnel
+  funnelId?: string | null; // stages in the «Статус» come from this funnel
+  edit?: boolean;
 }
 
 export interface LeadFormData {
@@ -37,7 +43,6 @@ export interface LeadFormData {
   service: string;
   paymentSystem: string;
   paymentSystemCustom: string;
-  usedServices: string[];
   projectDeadline: string;
   pushAt: string;
   pushComment: string;
@@ -48,12 +53,23 @@ export interface LeadFormData {
 
 const SHOP_SERVICES = ["ШБ Інтернет магазин", "Індив Інтернет магазин"];
 
-export const ALL_UPSELL_SERVICES = UPSELL_SERVICES;
+// template cards on top: «Новий» (no service) + every service
+const SERVICE_META: Record<string, { icon: LucideIcon; color: string; short: string }> = {
+  "АІ лендос": { icon: Sparkles, color: "#a78bfa", short: "АІ лендос" },
+  "АІ корпоративний": { icon: Building2, color: "#c084fc", short: "АІ корпоративний" },
+  "АІ каталог": { icon: LayoutGrid, color: "#e879f9", short: "АІ каталог" },
+  "ШБ лендинг": { icon: FileText, color: "#38bdf8", short: "ШБ лендинг" },
+  "ШБ Корпоративний": { icon: Briefcase, color: "#22d3ee", short: "ШБ корпоративний" },
+  "ШБ Інтернет магазин": { icon: ShoppingCart, color: "#2dd4bf", short: "ШБ магазин" },
+  "Індив Інтернет магазин": { icon: Store, color: "#f59e0b", short: "Індив магазин" },
+};
+const NEW = { key: "", label: "Новий", icon: Plus, color: "#C98C0A" };
+const templateOf = (service: string) => {
+  const m = SERVICE_META[service];
+  return m ? { key: service, label: m.short, icon: m.icon, color: m.color } : NEW;
+};
 
-const f = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]";
-const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-0.5 uppercase tracking-wide";
-
-export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps) {
+export function LeadForm({ onSave, onCancel, initial, funnelId, edit }: LeadFormProps) {
   const { settings } = useCrmSettings();
   const funnel = getFunnel(settings, funnelId);
   const [statusTouched, setStatusTouched] = useState(false);
@@ -78,7 +94,6 @@ export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps)
     service: initial?.service ?? "",
     paymentSystem: initial?.paymentSystem ?? "",
     paymentSystemCustom: initial?.paymentSystemCustom ?? "",
-    usedServices: initial?.usedServices ?? [],
     projectDeadline: initial?.projectDeadline ?? "",
     pushAt: initial?.pushAt ?? "",
     pushComment: initial?.pushComment ?? "",
@@ -86,6 +101,8 @@ export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps)
     messenger: initial?.messenger ?? "",
     createdAt: initial?.createdAt ?? new Date().toISOString().slice(0, 10),
   });
+  // «Ще поля» open by itself when one of them is filled (editing)
+  const [more, setMore] = useState(() => !!(initial?.name || initial?.instagram || initial?.email || initial?.comment || initial?.siteStructure || initial?.pushAt || initial?.projectDeadline || initial?.messenger || initial?.hasExtraLang || initial?.paymentSystem));
   const [saving, setSaving] = useState(false);
   const [customCampaign, setCustomCampaign] = useState(false);
   const { campaigns } = useAdCampaigns();
@@ -93,15 +110,7 @@ export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps)
   const set = (k: keyof LeadFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setData((d) => ({ ...d, [k]: e.target.value }));
-
-  function toggleService(s: string) {
-    setData((d) => ({
-      ...d,
-      usedServices: d.usedServices.includes(s)
-        ? d.usedServices.filter((x) => x !== s)
-        : [...d.usedServices, s],
-    }));
-  }
+  const put = (patch: Partial<LeadFormData>) => setData((d) => ({ ...d, ...patch }));
 
   // Status options: working stages of the funnel. A closed lead keeps its win/loss stage
   // (closing with a reason happens via the stage bar / lead card, not here).
@@ -112,7 +121,12 @@ export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps)
   const statusValue = !statusTouched && statusSelect === current.stage.id ? data.status : statusSelect;
 
   const isShop = SHOP_SERVICES.includes(data.service);
-  const upsell = ALL_UPSELL_SERVICES.filter((s) => !data.usedServices.includes(s));
+  const tpl = templateOf(data.service);
+  const templates = [NEW, ...SERVICES.map(templateOf)];
+  const source = SOURCES.find((s) => s.value === data.source);
+  const trafficType = adTypeOf(data.source);
+  const n = Number(data.amount.replace(/\s/g, "").replace(",", "."));
+  const cur = (data.currency ?? "EUR") as keyof typeof CURRENCY_SYMBOL;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -129,264 +143,148 @@ export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps)
     }
   }
 
+  const cell = "px-3 py-2 min-w-0";
+  const bare = "w-full bg-transparent text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-dim)]";
+
   return (
-    <form onSubmit={submit}>
-      {/* ── TWO-COLUMN MAIN GRID ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2.5">
-
-        {/* LEFT COL */}
-        <div className="space-y-2.5">
-          <div>
-            <label className={lbl}>Ім'я</label>
-            <input value={data.name} onChange={set("name")} autoFocus className={f} placeholder="Іван Петренко (необовʼязково)" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lbl}><span style={{ color: "#E4405F" }}>■</span> Instagram</label>
-              <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-dim)] text-xs select-none">@</span>
-                <input value={data.instagram} onChange={set("instagram")} className={`${f} pl-5`} placeholder="username" />
-              </div>
-            </div>
-            <div>
-              <label className={lbl}><span style={{ color: "#26A5E4" }}>■</span> Telegram</label>
-              <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-dim)] text-xs select-none">@</span>
-                <input value={data.telegram} onChange={set("telegram")} className={`${f} pl-5`} placeholder="username" />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lbl}>Телефон</label>
-              <input
-                value={data.phone}
-                // Phone is stored without spaces / dashes / brackets — cleaned while typing or pasting.
-                onChange={(e) => setData((d) => ({ ...d, phone: cleanPhone(e.target.value) }))}
-                inputMode="tel"
-                className={f}
-                placeholder="+380..."
-              />
-            </div>
-            <div>
-              <label className={lbl}>Email</label>
-              <input value={data.email} onChange={set("email")} type="email" className={f} placeholder="email@..." />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lbl}>Джерело</label>
-              <select
-                value={data.source}
-                onChange={(e) => { setCustomCampaign(false); setData((d) => ({ ...d, source: e.target.value, sourceDetail: "" })); }}
-                className={`${f} cursor-pointer`}
-              >
-                <option value="">—</option>
-                {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
-              </select>
-              {SOURCES.find((s) => s.value === data.source)?.detail && (() => {
-                // Для платного трафіку (Таргет/Автопрозвон) кампанія вибирається зі сторінки «Реклама»
-                const trafficType = adTypeOf(data.source);
-                if (!trafficType || customCampaign) {
-                  return (
-                    <input
-                      value={data.sourceDetail}
-                      onChange={set("sourceDetail")}
-                      className={`${f} mt-1.5`}
-                      placeholder={SOURCES.find((s) => s.value === data.source)?.detail}
-                      autoFocus={customCampaign}
-                    />
-                  );
-                }
-                const options = campaigns.filter((c) => c.trafficType === trafficType);
-                const hasCurrent = !data.sourceDetail || options.some((c) => c.name.toLowerCase() === data.sourceDetail.trim().toLowerCase());
-                return (
-                  <select
-                    value={data.sourceDetail}
-                    onChange={(e) => {
-                      if (e.target.value === "__custom__") { setCustomCampaign(true); setData((d) => ({ ...d, sourceDetail: "" })); }
-                      else setData((d) => ({ ...d, sourceDetail: e.target.value }));
-                    }}
-                    className={`${f} mt-1.5 cursor-pointer`}
-                  >
-                    <option value="">— кампанія —</option>
-                    {!hasCurrent && <option value={data.sourceDetail}>{data.sourceDetail}</option>}
-                    {options.map((c) => <option key={c.id} value={c.name}>{c.name}{c.active ? "" : " (вимкнена)"}</option>)}
-                    <option value="__custom__">+ Вписати вручну</option>
-                  </select>
-                );
-              })()}
-            </div>
-            <div>
-              <label className={lbl}>Статус</label>
-              <select
-                value={statusSelect}
-                onChange={(e) => { setStatusTouched(true); setData((d) => ({ ...d, status: e.target.value })); }}
-                className={`${f} cursor-pointer`}
-              >
-                {statusOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lbl}>Гео</label>
-              <input value={data.geo} onChange={set("geo")} className={f} placeholder="UA..." />
-            </div>
-            <div>
-              <label className={lbl}>Ніша</label>
-              <input value={data.niche} onChange={set("niche")} className={f} placeholder="e-comm..." />
-            </div>
-          </div>
-
-          <div>
-            <label className={lbl}>Канал комунікації</label>
-            <select value={data.messenger} onChange={set("messenger")} className={`${f} cursor-pointer`}>
-              <option value="">— де переписка —</option>
-              {COMMUNICATION_CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lbl}>Сума</label>
-              <div className="flex gap-1">
-                <input value={data.amount} onChange={(e) => setData((d) => ({ ...d, amount: groupNum(e.target.value) }))} inputMode="decimal" className={`${f} min-w-0 tabular-nums`} placeholder="0" />
-                <select value={data.currency ?? "EUR"} onChange={set("currency")} className={`${f} !w-auto cursor-pointer`} aria-label="Валюта">
-                  {CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_SYMBOL[c]} {c}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className={lbl}>Дата створення</label>
-              <input value={data.createdAt} onChange={set("createdAt")} type="date" className={f} />
-            </div>
-          </div>
-
-          <div>
-            <label className={lbl}>Загальний коментар</label>
-            <textarea value={data.comment} onChange={set("comment")} rows={3} className={`${f} resize-none`} placeholder="Нотатки..." />
-          </div>
-        </div>
-
-        {/* RIGHT COL */}
-        <div className="space-y-2.5">
-          <div>
-            <label className={lbl}>Послуга</label>
-            <select
-              value={data.service}
-              onChange={(e) => setData((d) => ({ ...d, service: e.target.value, paymentSystem: "", paymentSystemCustom: "" }))}
-              className={`${f} cursor-pointer`}
-            >
-              <option value="">— не вибрано —</option>
-              {SERVICES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          {isShop && (
-            <div>
-              <label className={lbl}>Платіжна система</label>
-              <select value={data.paymentSystem} onChange={set("paymentSystem")} className={`${f} cursor-pointer`}>
-                <option value="">—</option>
-                {PAYMENT_SYSTEMS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-              {data.paymentSystem === "Інше" && (
-                <input value={data.paymentSystemCustom} onChange={set("paymentSystemCustom")} className={`${f} mt-1.5`} placeholder="Вкажіть..." />
-              )}
-            </div>
-          )}
-
-          <div>
-            <label className={lbl}>Структура сайту</label>
-            <textarea value={data.siteStructure} onChange={set("siteStructure")} rows={isShop ? 4 : 6} className={`${f} resize-y min-h-[80px]`} placeholder="Сторінки, розділи..." />
-          </div>
-
-          <div>
-            <label className="flex items-center gap-1.5 cursor-pointer select-none mb-1">
-              <input
-                type="checkbox"
-                checked={data.hasExtraLang}
-                onChange={(e) => setData((d) => ({ ...d, hasExtraLang: e.target.checked, languages: e.target.checked ? d.languages : "" }))}
-                className="w-3.5 h-3.5 rounded accent-[var(--accent)] cursor-pointer"
-              />
-              <span className="text-xs text-[var(--text)]">Додаткова мова</span>
-            </label>
-            {data.hasExtraLang && (
-              <input value={data.languages} onChange={set("languages")} className={f} placeholder="EN, PL, DE..." />
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lbl}>Коли запушити</label>
-              <input type="datetime-local" value={data.pushAt} onChange={set("pushAt")} className={f} />
-            </div>
-            <div>
-              <label className={lbl}>Термін проєкту</label>
-              <input value={data.projectDeadline} onChange={set("projectDeadline")} className={f} placeholder="30 днів..." />
-            </div>
-          </div>
-
-          <div>
-            <label className={lbl}>Коментар до пушу</label>
-            <textarea value={data.pushComment} onChange={set("pushComment")} rows={2} className={`${f} resize-none`} placeholder="Короткий опис — буде у Telegram-повідомленні..." />
-          </div>
-        </div>
+    <form onSubmit={submit} className="space-y-4">
+      {/* what we sell — the template of the lead */}
+      <div>
+        <FieldLabel>Що продаємо</FieldLabel>
+        <TemplateCards options={templates} value={tpl.key} onChange={(k) => put({ service: k, paymentSystem: "", paymentSystemCustom: "" })} />
       </div>
 
-      {/* ── SERVICES FULL WIDTH ── */}
-      <div className="mt-3 pt-3 border-t border-[var(--border)] space-y-2">
-        <div>
-          <p className={`${lbl} mb-1`}>Клієнт вже використовує</p>
-          <div className="flex flex-wrap gap-1.5">
-            {ALL_UPSELL_SERVICES.map((s) => {
-              const on = data.usedServices.includes(s);
-              return (
-                <button
-                  key={s} type="button" onClick={() => toggleService(s)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer ${
-                    on ? "text-black border-transparent" : "text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent)]"
-                  }`}
-                  style={on ? { background: "var(--accent)" } : {}}
-                >
-                  {s}
-                </button>
-              );
-            })}
+      {/* contact: phone · telegram — one line */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] focus-within:border-[var(--accent)]/60 transition-colors overflow-hidden">
+        <label className={`${cell} border-b sm:border-b-0 sm:border-r border-[var(--border)]`}>
+          <span className={cellLabelCls}>Телефон</span>
+          {/* stored without spaces / dashes / brackets — cleaned while typing or pasting */}
+          <input autoFocus={!edit} value={data.phone} onChange={(e) => put({ phone: cleanPhone(e.target.value) })} inputMode="tel" placeholder="+380…"
+            className={`${bare} text-lg font-semibold tabular-nums`} />
+        </label>
+        <label className={cell}>
+          <span className={cellLabelCls}><span style={{ color: "#26A5E4" }}>●</span> Telegram</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[var(--text-dim)] text-lg select-none">@</span>
+            <input value={data.telegram} onChange={set("telegram")} placeholder="username" className={`${bare} text-lg font-semibold`} />
           </div>
-        </div>
+        </label>
+      </div>
 
-        {upsell.length > 0 && (
+      {/* source + campaign */}
+      <div className={`grid grid-cols-1 ${source?.detail ? "sm:grid-cols-2" : ""} gap-2`}>
+        <div>
+          <FieldLabel>Джерело</FieldLabel>
+          <Select value={data.source} placeholder="— звідки лід —"
+            onChange={(v) => { setCustomCampaign(false); put({ source: v, sourceDetail: "" }); }}
+            options={SOURCES.map((s) => ({ value: s.value, label: s.value }))} />
+        </div>
+        {source?.detail && (
           <div>
-            <p className={`${lbl} mb-1`} style={{ color: "#22c55e" }}>Рекомендовано допродати</p>
-            <div className="flex flex-wrap gap-1.5">
-              {upsell.map((s) => (
-                <span key={s} className="px-2.5 py-1 rounded-md text-[11px] border" style={{ color: "#22c55e", borderColor: "rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.07)" }}>
-                  {s}
-                </span>
-              ))}
+            <FieldLabel>{trafficType ? "Кампанія" : source.detail}</FieldLabel>
+            {!trafficType || customCampaign ? (
+              <input value={data.sourceDetail} onChange={set("sourceDetail")} className={fieldCls} placeholder={source.detail} autoFocus={customCampaign} />
+            ) : (() => {
+              const options = campaigns.filter((c) => c.trafficType === trafficType);
+              const hasCurrent = !data.sourceDetail || options.some((c) => c.name.toLowerCase() === data.sourceDetail.trim().toLowerCase());
+              return (
+                <Select value={data.sourceDetail} placeholder="— кампанія —"
+                  onChange={(v) => { if (v === "__custom__") { setCustomCampaign(true); put({ sourceDetail: "" }); } else put({ sourceDetail: v }); }}
+                  options={[
+                    ...(!hasCurrent ? [{ value: data.sourceDetail, label: data.sourceDetail }] : []),
+                    ...options.map((c) => ({ value: c.name, label: c.name, color: c.active ? "#4ade80" : "#71717a", sub: c.active ? undefined : "вимкнена" })),
+                    { value: "__custom__", label: "+ Вписати вручну" },
+                  ]} />
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {/* stage the lead lands on */}
+      <div>
+        <FieldLabel>На який статус падає</FieldLabel>
+        <ChipRow options={statusOptions.map((s) => ({ key: s.id, label: s.label, color: s.color }))} value={statusSelect}
+          onChange={(k) => { setStatusTouched(true); put({ status: k }); }} />
+      </div>
+
+      {/* niche · geo */}
+      <div className="grid grid-cols-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] focus-within:border-[var(--accent)]/60 transition-colors overflow-hidden">
+        <label className={`${cell} border-r border-[var(--border)]`}>
+          <span className={cellLabelCls}>Ніша</span>
+          <input value={data.niche} onChange={set("niche")} placeholder="Барбершоп, e-comm…" className={bare} />
+        </label>
+        <label className={cell}>
+          <span className={cellLabelCls}>Гео</span>
+          <input value={data.geo} onChange={set("geo")} placeholder="UA, PL, Київ…" className={bare} />
+        </label>
+      </div>
+
+      {/* amount · currency */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] rounded-xl border border-[var(--border)] bg-[var(--surface-2)] focus-within:border-[var(--accent)]/60 transition-colors overflow-hidden">
+        <label className={cell}>
+          <span className={cellLabelCls}>Сума</span>
+          <input value={data.amount} onChange={(e) => put({ amount: groupNum(e.target.value) })} inputMode="decimal" placeholder="0"
+            className="w-full bg-transparent text-[26px] leading-tight sm:text-xl font-bold tabular-nums outline-none placeholder:text-[var(--text-dim)]" style={{ color: tpl.color }} />
+        </label>
+        <CurrencyButtons list={CURRENCIES} value={cur} onChange={(c) => put({ currency: c })} />
+      </div>
+
+      {isShop && (
+        <div>
+          <FieldLabel>Платіжна система</FieldLabel>
+          <ChipRow options={PAYMENT_SYSTEMS.map((p) => ({ key: p, label: p, color: tpl.color }))} value={data.paymentSystem} onChange={(k) => put({ paymentSystem: k })} />
+          {data.paymentSystem === "Інше" && <input value={data.paymentSystemCustom} onChange={set("paymentSystemCustom")} className={`${fieldCls} mt-2`} placeholder="Вкажіть…" />}
+        </div>
+      )}
+
+      {/* the rest — folded */}
+      <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+        <button type="button" onClick={() => setMore((v) => !v)}
+          className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-white/[0.02] cursor-pointer transition-colors">
+          <span className="font-semibold">Ще поля</span>
+          <span className="text-[var(--text-dim)] truncate">імʼя, Instagram, email, коментар, структура, пуш…</span>
+          <ChevronDown size={14} className={`ml-auto shrink-0 transition-transform duration-200 ${more ? "rotate-180" : ""}`} />
+        </button>
+        {more && (
+          <div className="px-3.5 pb-3.5 pt-1 space-y-3 border-t border-[var(--border)]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div><FieldLabel>Імʼя</FieldLabel><input value={data.name} onChange={set("name")} className={fieldCls} placeholder="Іван Петренко" /></div>
+              <div><FieldLabel>Instagram</FieldLabel><input value={data.instagram} onChange={set("instagram")} className={fieldCls} placeholder="username (без @)" /></div>
+              <div><FieldLabel>Email</FieldLabel><input value={data.email} onChange={set("email")} type="email" className={fieldCls} placeholder="email@…" /></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <FieldLabel>Канал комунікації</FieldLabel>
+                <Select value={data.messenger} onChange={(v) => put({ messenger: v })} placeholder="— де переписка —"
+                  options={[{ value: "", label: "— не вказано —" }, ...COMMUNICATION_CHANNELS.map((c) => ({ value: c, label: c }))]} />
+              </div>
+              <div><FieldLabel>Дата створення</FieldLabel><input value={data.createdAt} onChange={set("createdAt")} type="date" className={fieldCls} style={{ colorScheme: "dark" }} /></div>
+            </div>
+            <div><FieldLabel>Коментар</FieldLabel><textarea value={data.comment} onChange={set("comment")} rows={2} className={`${fieldCls} resize-none`} placeholder="Нотатки…" /></div>
+            <div><FieldLabel>Структура сайту</FieldLabel><textarea value={data.siteStructure} onChange={set("siteStructure")} rows={3} className={`${fieldCls} resize-y`} placeholder="Сторінки, розділи…" /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none mb-1.5">
+                  <input type="checkbox" checked={data.hasExtraLang} onChange={(e) => put({ hasExtraLang: e.target.checked, languages: e.target.checked ? data.languages : "" })}
+                    className="w-3.5 h-3.5 rounded accent-[var(--accent)] cursor-pointer" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">Додаткова мова</span>
+                </label>
+                {data.hasExtraLang && <input value={data.languages} onChange={set("languages")} className={fieldCls} placeholder="EN, PL, DE…" />}
+              </div>
+              <div><FieldLabel>Термін проєкту</FieldLabel><input value={data.projectDeadline} onChange={set("projectDeadline")} className={fieldCls} placeholder="30 днів…" /></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-2">
+              <div><FieldLabel>Коли запушити</FieldLabel><input type="datetime-local" value={data.pushAt} onChange={set("pushAt")} className={fieldCls} style={{ colorScheme: "dark" }} /></div>
+              <div><FieldLabel>Коментар до пушу</FieldLabel><input value={data.pushComment} onChange={set("pushComment")} className={fieldCls} placeholder="Буде у Telegram-повідомленні…" /></div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── ACTIONS ── */}
-      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--border)] max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:px-4 max-sm:-mb-4 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))] max-sm:bg-[var(--surface)]">
-        <button type="button" onClick={onCancel} className="px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
-          Скасувати
-        </button>
-        <button
-          type="submit" disabled={saving}
-          className="px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 cursor-pointer text-black"
-          style={{ background: "var(--accent)" }}
-        >
-          {saving ? "Збереження..." : "Зберегти"}
-        </button>
-      </div>
+      <FormFooter onCancel={onCancel} busy={saving} color={tpl.color}>
+        {saving ? "Збереження…" : edit ? "Зберегти" : <>{tpl.key ? `Новий лід · ${tpl.label}` : "Створити лід"}{n > 0 ? ` · ${data.amount} ${CURRENCY_SYMBOL[cur] ?? ""}` : ""}</>}
+      </FormFooter>
     </form>
   );
 }

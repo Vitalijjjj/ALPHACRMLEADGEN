@@ -655,7 +655,7 @@ function LeadsViewInner({ potential = false, openNumber }: { potential?: boolean
       {stageGuard.modal}
 
       {/* Modals */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); setCreateStatus(null); }} title="Новий лід" size="xl">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setCreateStatus(null); }} title="Новий лід" size="lg">
         {showCreate && (
           <LeadForm
             key={createStatus ?? "new"}
@@ -667,9 +667,10 @@ function LeadsViewInner({ potential = false, openNumber }: { potential?: boolean
         )}
       </Modal>
 
-      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Редагувати ліда" size="xl">
+      <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Редагувати ліда" size="lg">
         {editLead && (
           <LeadForm
+            edit
             funnelId={editLead.funnelId}
             onSave={updateLead}
             onCancel={() => setEditLead(null)}
@@ -693,7 +694,6 @@ function LeadsViewInner({ potential = false, openNumber }: { potential?: boolean
               service: editLead.service ?? "",
               paymentSystem: editLead.paymentSystem ?? "",
               paymentSystemCustom: "",
-              usedServices: editLead.usedServices ?? [],
               projectDeadline: editLead.projectDeadline ?? "",
               pushAt: editLead.pushAt ? toWarsawInput(editLead.pushAt) : "",
               pushComment: editLead.pushComment ?? "",

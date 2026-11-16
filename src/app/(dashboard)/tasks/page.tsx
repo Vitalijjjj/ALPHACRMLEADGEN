@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { startOfMonth, subMonths } from "date-fns";
 import { CalendarDays, Columns3, List, Plus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Modal } from "@/components/ui/modal";
-import { TaskForm } from "@/components/tasks/TaskForm";
+import TaskModal, { type NewTask } from "@/components/tasks/TaskModal";
 import LeadDrawer from "@/components/leads/LeadDrawer";
 import TasksTable from "@/components/tasks/TasksTable";
 import TasksBoard from "@/components/tasks/TasksBoard";
@@ -88,13 +87,13 @@ export default function TasksPage() {
 
   const actions = useTaskActions(fetchTasks);
 
-  async function createTask(data: Record<string, unknown>) {
+  async function createTask(data: NewTask) {
     const res = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) return toastError("Не вдалося створити задачу");
+    if (!res.ok) { toastError("Не вдалося створити задачу"); return false; }
     setCreate(null);
     qc.invalidateQueries({ queryKey: BELL_KEY });
     fetchTasks();
@@ -251,9 +250,7 @@ export default function TasksPage() {
         />
       )}
 
-      <Modal open={!!create} onClose={() => setCreate(null)} title="Нова задача" size="sm">
-        {create && <TaskForm onSave={createTask} onCancel={() => setCreate(null)} initialDeadline={create.deadline} />}
-      </Modal>
+      <TaskModal open={!!create} onClose={() => setCreate(null)} onCreate={createTask} title="Нова задача" initialDeadline={create?.deadline} />
 
       {actions.modal}
 
