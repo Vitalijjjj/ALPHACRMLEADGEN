@@ -27,7 +27,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -36,7 +36,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
         className={cn(
           "relative bg-[var(--surface)] border border-[var(--border)] shadow-2xl w-full flex flex-col",
           "rounded-t-2xl sm:rounded-xl",
-          "max-h-[94vh] sm:max-h-[92vh]",
+          "max-h-[94dvh] sm:max-h-[92vh]",
           size === "sm" && "sm:max-w-sm",
           size === "md" && "sm:max-w-lg",
           size === "lg" && "sm:max-w-2xl",
@@ -56,7 +56,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
             <X size={16} />
           </button>
         </div>
-        <div className="overflow-y-auto p-4 sm:p-5 flex-1">{children}</div>
+        <div className="overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-5 flex-1">{children}</div>
       </div>
     </div>
   );

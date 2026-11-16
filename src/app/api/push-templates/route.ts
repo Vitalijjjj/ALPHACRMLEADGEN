@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAccess } from "@/lib/accessServer";
 import { db } from "@/lib/db";
 
 const DEFAULT_TEMPLATES = [
@@ -30,6 +31,7 @@ async function ensureTable() {
       CONSTRAINT "PushTemplate_pkey" PRIMARY KEY ("id")
     )
   `);
+  await db.$executeRawUnsafe(`ALTER TABLE "PushTemplate" ADD COLUMN IF NOT EXISTS "category" TEXT`);
 }
 
 export async function GET() {
@@ -41,7 +43,7 @@ export async function GET() {
     let items = await db.pushTemplate.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
     if (items.length === 0) {
       await db.pushTemplate.createMany({
-        data: DEFAULT_TEMPLATES.map((text, i) => ({ text, sortOrder: i })),
+        data: DEFAULT_TEMPLATES.map((text, i) => ({ text, sortOrder: i, category: "Пуші" })),
       });
       items = await db.pushTemplate.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
     }
@@ -53,8 +55,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAccess("pushes");
+  if ("error" in gate) return gate.error;
 
   try {
     const body = await req.json();
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
     const item = await db.pushTemplate.create({
       data: {
         title: body.title?.trim() || null,
+        category: typeof body.category === "string" && body.category.trim() ? body.category.trim() : null,
         text,
         sortOrder: (max._max.sortOrder ?? -1) + 1,
       },

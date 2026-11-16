@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAccess } from "@/lib/accessServer";
 import { db, ensureSchema } from "@/lib/db";
-import { normalizeTrafficType } from "@/lib/leadOptions";
+import { getAdSettings } from "@/lib/adTypesServer";
+import { findType } from "@/lib/adTypes";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAccess("ads");
+  if ("error" in gate) return gate.error;
 
   const { id } = await params;
 
@@ -15,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (body.name !== undefined) data.name = String(body.name).trim();
     if (body.trafficType !== undefined) {
-      const type = normalizeTrafficType(body.trafficType);
+      const type = findType(await getAdSettings(), body.trafficType)?.name;
       if (type) data.trafficType = type;
     }
     if (body.dailyBudget !== undefined) data.dailyBudget = body.dailyBudget === "" || body.dailyBudget === null ? null : parseFloat(String(body.dailyBudget));
@@ -34,8 +35,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAccess("ads");
+  if ("error" in gate) return gate.error;
 
   const { id } = await params;
 

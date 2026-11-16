@@ -1,7 +1,11 @@
 import { db, ensureSchema } from "@/lib/db";
+import { getFx } from "@/lib/fxServer";
+import { getCrmSettings } from "@/lib/crmSettingsServer";
+import { getFunnel } from "@/lib/crmSettings";
+import { replayStages } from "@/lib/stageFlow";
+import { getAdSettings } from "@/lib/adTypesServer";
+import { findType } from "@/lib/adTypes";
 import {
-  AD_TRAFFIC_TYPES,
-  normalizeTrafficType,
   statusMatchValues,
   TARGETED_STATUSES,
   WON_STATUSES,
@@ -10,10 +14,16 @@ import {
 // ── Автосинк: кампанії, що вже існують у лідах, заносяться в AdCampaign ──
 // Унікальність — (назва, тип трафіку) без урахування регістру; startDate = перший лід кампанії.
 export async function syncCampaignsFromLeads() {
+  const settings = await getAdSettings();
+  // «загально» types (Контекст) get one campaign named as the type — it's what the cashflow points at
+  for (const t of settings.types.filter((x) => x.mode === "spend")) {
+    const has = await db.adCampaign.findFirst({ where: { trafficType: t.name, name: t.name }, select: { id: true } });
+    if (!has) await db.adCampaign.create({ data: { name: t.name, trafficType: t.name } }).catch(() => {});
+  }
   const [leads, existing] = await Promise.all([
     db.lead.findMany({
       where: {
-        source: { in: [...AD_TRAFFIC_TYPES], mode: "insensitive" },
+        source: { in: settings.types.map((t) => t.name), mode: "insensitive" },
         sourceDetail: { not: null },
       },
       select: { source: true, sourceDetail: true, createdAt: true },
@@ -27,7 +37,7 @@ export async function syncCampaignsFromLeads() {
 
   for (const lead of leads) {
     const name = lead.sourceDetail?.trim();
-    const type = normalizeTrafficType(lead.source);
+    const type = findType(settings, lead.source)?.name;
     if (!name || !type) continue;
     const key = `${type.toLowerCase()}|${name.toLowerCase()}`;
     if (known.has(key) || fresh.has(key)) continue;
@@ -70,33 +80,8 @@ export interface CampaignStatsResult {
   periodLabel: string;
 }
 
-const DAY = 86400000;
-const dayIndex = (d: Date) => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY);
 const fmt = (d: Date) =>
   `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
-
-// Скільки бюджету «відкрутилось» у межах вибраного періоду.
-// Таргет: денний бюджет × активні дні в періоді. Автопрозвон: загальний бюджет,
-// пропорційно перекриттю періоду з тривалістю кампанії.
-function spentInPeriod(
-  c: { trafficType: string; dailyBudget: number | null; totalBudget: number | null; startDate: Date | null; endDate: Date | null },
-  periodStart: Date,
-  periodEnd: Date,
-  now: Date
-): number {
-  const startIdx = dayIndex(c.startDate ?? periodStart);
-  const endIdx = Math.min(dayIndex(c.endDate ?? now), dayIndex(now));
-  const from = Math.max(startIdx, dayIndex(periodStart));
-  const to = Math.min(endIdx, dayIndex(periodEnd));
-  const days = to - from + 1;
-  if (days <= 0) return 0;
-
-  if (c.trafficType === "Автопрозвон") {
-    const totalDays = Math.max(endIdx - startIdx + 1, 1);
-    return (c.totalBudget ?? 0) * Math.min(days / totalDays, 1);
-  }
-  return (c.dailyBudget ?? 0) * days;
-}
 
 // Всі статуси, в яких лід будь-коли перебував: поточний + розібрана історія STATUS_CHANGE.
 export function statusHistorySet(current: string, activityContents: string[]): Set<string> {
@@ -130,6 +115,8 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
   try {
     await ensureSchema();
     await syncCampaignsFromLeads();
+    const crm = await getCrmSettings();
+    const settings = await getAdSettings();
 
     const [campaigns, leads] = await Promise.all([
       db.adCampaign.findMany({ orderBy: { createdAt: "asc" } }),
@@ -139,16 +126,31 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
           source: true,
           sourceDetail: true,
           status: true,
-          activities: { where: { type: "STATUS_CHANGE" }, select: { content: true } },
+          funnelId: true,
+          activities: { where: { type: "STATUS_CHANGE" }, select: { content: true, createdAt: true } },
         },
       }),
     ]);
+
+    // Реальні витрати на рекламу з кешфлоу («Реклама» → кампанія) — у доларах, як бюджети
+    const fx = await getFx();
+    const paid = await db.transaction.findMany({
+      where: { adCampaignId: { not: null }, kind: "expense", date: { gte: periodStart, lte: periodEnd } },
+      select: { adCampaignId: true, amount: true, currency: true, amountUah: true },
+    });
+    const realSpent = new Map<string, number>();
+    for (const t of paid) {
+      const usd = t.currency === "USD" ? t.amount : t.amountUah / (fx.usdUah || 1);
+      realSpent.set(t.adCampaignId!, (realSpent.get(t.adCampaignId!) ?? 0) + usd);
+    }
 
     // Лічильники лідів по кампаніях: key = тип|назва (lowercase), fallback = тип|""
     const counters = new Map<string, { leads: number; targeted: number; proposals: number; won: number }>();
     const bump = (key: string, lead: (typeof leads)[number]) => {
       const c = counters.get(key) ?? { leads: 0, targeted: 0, proposals: 0, won: 0 };
+      // Logged statuses + stages passed under the funnel rules (jump forward = passed the stages in between)
       const history = statusHistorySet(lead.status, lead.activities.map((a) => a.content));
+      for (const st of replayStages(getFunnel(crm, lead.funnelId), lead.status, lead.activities).visited) history.add(st);
       c.leads++;
       if (hasAny(history, TARGETED_STATUSES)) c.targeted++;
       if (hasAny(history, PROPOSAL_VALUES)) c.proposals++;
@@ -159,7 +161,7 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
     // Рекламні ліди рахуються по кампаніях; решта джерел — сумарно по джерелу (key = "src|назва")
     const campaignKeys = new Set(campaigns.map((c) => `${c.trafficType.toLowerCase()}|${c.name.trim().toLowerCase()}`));
     for (const lead of leads) {
-      const type = normalizeTrafficType(lead.source);
+      const type = findType(settings, lead.source)?.name;
       if (type) {
         const name = lead.sourceDetail?.trim().toLowerCase() ?? "";
         const key = `${type.toLowerCase()}|${name}`;
@@ -170,23 +172,24 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
     }
 
     const groups: TrafficTypeGroup[] = [];
-    for (const type of AD_TRAFFIC_TYPES) {
+    for (const { name: type, mode } of settings.types) {
       const rows: CampaignStatRow[] = [];
+      const ofType = campaigns.filter((x) => x.trafficType === type);
+      // витрати — лише те, що оплачено в кешфлоу
+      const spentOf = (c: (typeof campaigns)[number]) => realSpent.get(c.id) ?? 0;
+      const typeSpent = ofType.reduce((sum, c) => sum + spentOf(c), 0);
 
-      for (const c of campaigns.filter((x) => x.trafficType === type)) {
+      for (const c of ofType) {
         const counts = counters.get(`${type.toLowerCase()}|${c.name.trim().toLowerCase()}`);
         if (!counts || counts.leads === 0) continue; // пусті кампанії без лідів у періоді не показуємо
-        const spent = spentInPeriod(c, periodStart, periodEnd, now);
+        const spent = spentOf(c);
         rows.push({
           key: c.id,
           name: c.name,
           trafficType: type,
           active: c.active,
           isFallback: false,
-          budgetLabel:
-            type === "Автопрозвон"
-              ? c.totalBudget != null ? `$${c.totalBudget.toLocaleString("en-US", { maximumFractionDigits: 0 })} всього` : "—"
-              : c.dailyBudget != null ? `$${c.dailyBudget.toLocaleString("en-US", { maximumFractionDigits: 0 })}/день` : "—",
+          budgetLabel: mode === "spend" ? "загально" : "",
           spent,
           ...counts,
           costPerLead: priceOf(spent, counts.leads),
@@ -197,18 +200,20 @@ export async function getCampaignStats(dateFrom?: string, dateTo?: string): Prom
 
       const fallback = counters.get(`${type.toLowerCase()}|`);
       if (fallback && fallback.leads > 0) {
+        // за фактом (Контекст): ліди без кампанії несуть решту витрат типу — так видно ціну ліда
+        const rest = mode === "spend" ? Math.max(0, typeSpent - rows.reduce((sum, r) => sum + r.spent, 0)) : 0;
         rows.push({
           key: `${type}-fallback`,
-          name: "Без кампанії",
+          name: mode === "spend" ? "Усі кампанії" : "Без кампанії",
           trafficType: type,
           active: false,
           isFallback: true,
-          budgetLabel: "—",
-          spent: 0,
+          budgetLabel: mode === "spend" ? "загально" : "—",
+          spent: rest,
           ...fallback,
-          costPerLead: null,
-          costPerProposal: null,
-          costPerSale: null,
+          costPerLead: priceOf(rest, fallback.leads),
+          costPerProposal: priceOf(rest, fallback.proposals),
+          costPerSale: priceOf(rest, fallback.won),
         });
       }
 

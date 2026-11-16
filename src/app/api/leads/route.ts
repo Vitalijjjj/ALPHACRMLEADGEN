@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db, ensureSchema } from "@/lib/db";
 import { statusMatchValues, POTENTIAL_STATUSES } from "@/lib/leadOptions";
+import { getCrmSettings, funnelWhere } from "@/lib/crmSettingsServer";
+import { buildFilterWhere, parseFilterQuery, searchWhere } from "@/lib/leadFilterServer";
+import { asCurrency } from "@/lib/currency";
+import { cleanPhone } from "@/lib/leadFilter";
+import { canLead, forbidden, requireAccess, visibleLeadsWhere } from "@/lib/accessServer";
+import { syncStageTasks } from "@/lib/taskAutomationServer";
+import { logCreation } from "@/lib/stageFlowServer";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAccess();
+  if ("error" in gate) return gate.error;
+  const { access, settings: accessSettings } = gate;
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("q") ?? "";
@@ -14,6 +21,7 @@ export async function GET(req: NextRequest) {
   const campaign = searchParams.get("campaign") ?? undefined;
   const dateFrom = searchParams.get("dateFrom") ?? undefined;
   const dateTo = searchParams.get("dateTo") ?? undefined;
+  const funnel = searchParams.get("funnel") ?? undefined;
   // Вкладка Potential: гарячі стадії + всі ліди із запланованим пушем
   const potential = searchParams.get("potential") === "1";
 
@@ -28,35 +36,36 @@ export async function GET(req: NextRequest) {
 
   try {
     await ensureSchema();
+    const funnelFilter = funnel ? funnelWhere(await getCrmSettings(), funnel) : null;
     const potentialValues = POTENTIAL_STATUSES.flatMap(statusMatchValues);
+    const filterQuery = parseFilterQuery(searchParams.get("f"));
+    const [filterAnd, searchFilter] = await Promise.all([
+      filterQuery ? buildFilterWhere(filterQuery) : Promise.resolve([]),
+      searchWhere(search),
+    ]);
     const leads = await db.lead.findMany({
       where: {
-        // НДЗ (Недозвон) у Potential не показується, навіть якщо на ліда запланований пуш
-        ...(potential
-          ? {
-              AND: [
+        AND: [
+          ...(funnelFilter ? [funnelFilter] : []),
+          // only funnels this user may see
+          ...(visibleLeadsWhere(access, accessSettings) ? [visibleLeadsWhere(access, accessSettings)!] : []),
+          // НДЗ (Недозвон) у Potential не показується, навіть якщо на ліда запланований пуш
+          ...(potential
+            ? [
                 { OR: [{ status: { in: potentialValues } }, { pushAt: { not: null } }] },
                 { status: { not: "MISSED_CALL" } },
-              ],
-            }
+              ]
+            : []),
+          ...filterAnd,
+          ...(searchFilter ? [searchFilter] : []),
+        ],
+        // status may be a comma-separated list: ?status=NEW_LEAD,PROPOSAL
+        ...(status
+          ? { status: { in: status.split(",").map((v) => v.trim()).filter(Boolean).flatMap(statusMatchValues) } }
           : {}),
-        ...(status ? { status: { in: statusMatchValues(status) } } : {}),
         ...(source ? { source: { equals: source, mode: "insensitive" } } : {}),
         ...(campaign ? { sourceDetail: { equals: campaign, mode: "insensitive" } } : {}),
         ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: "insensitive" } },
-                { instagram: { contains: search, mode: "insensitive" } },
-                { telegram: { contains: search, mode: "insensitive" } },
-                { email: { contains: search, mode: "insensitive" } },
-                { phone: { contains: search, mode: "insensitive" } },
-                { niche: { contains: search, mode: "insensitive" } },
-                { geo: { contains: search, mode: "insensitive" } },
-              ],
-            }
-          : {}),
       },
       include: { _count: { select: { tasks: true, deals: true } } },
       orderBy: { updatedAt: "desc" },
@@ -70,17 +79,22 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAccess();
+  if ("error" in gate) return gate.error;
+  const { access, settings: accessSettings } = gate;
 
   const body = await req.json();
   const {
     name, instagram, telegram, phone, email, comment, source, sourceDetail, geo, niche, amount, tags, status,
     siteStructure, hasExtraLang, languages, service, paymentSystem, usedServices, projectDeadline, pushAt, pushComment, pushStage, messenger, createdAt,
+    funnelId, closeReason, currency, projectName, payer, partnerId,
   } = body;
 
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  if (!canLead(access, accessSettings, funnelId, "create")) return forbidden("Немає права додавати угоди в цю воронку");
+
+  // Name is optional — a lead without a name is shown as «Угода #<last digits of phone>».
+  if (!name?.trim() && !(phone && cleanPhone(String(phone)))) {
+    return NextResponse.json({ error: "Вкажіть імʼя або телефон" }, { status: 400 });
   }
 
   const cleanInstagram = instagram ? instagram.replace(/^@/, "").trim() : undefined;
@@ -89,17 +103,23 @@ export async function POST(req: NextRequest) {
   await ensureSchema();
   const lead = await db.lead.create({
     data: {
-      name,
+      name: name?.trim() ?? "",
+      funnelId: funnelId || null,
+      partnerId: typeof partnerId === "string" && partnerId ? partnerId : null,
+      projectName: typeof projectName === "string" && projectName.trim() ? projectName.trim() : null,
+      payer: typeof payer === "string" && payer.trim() ? payer.trim() : null,
+      closeReason: closeReason || null,
       instagram: cleanInstagram || null,
       telegram: cleanTelegram || null,
-      phone: phone || null,
+      phone: phone ? cleanPhone(String(phone)) || null : null,
       email: email || null,
       comment: comment || null,
       source: source || null,
       sourceDetail: sourceDetail || null,
       geo: geo || null,
       niche: niche || null,
-      amount: amount ? parseFloat(amount) : null,
+      amount: amount ? parseFloat(String(amount).replace(/\s/g, "").replace(",", ".")) || null : null,
+      currency: asCurrency(currency),
       tags: tags ?? [],
       status: status ?? "NEW_LEAD",
       siteStructure: siteStructure || null,
@@ -117,9 +137,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  await db.activity.create({
-    data: { leadId: lead.id, type: "STATUS_CHANGE", content: `Лід створено зі статусом: ${lead.status}` },
-  });
+  const settings = await getCrmSettings();
+  // created on a later stage → history passes every stage from the first one (НДЗ skipped)
+  await logCreation(db, settings, lead);
+  try {
+    await syncStageTasks(db, settings, lead);
+  } catch (e) {
+    console.error("auto tasks on create:", e);
+  }
 
   return NextResponse.json(lead, { status: 201 });
 }

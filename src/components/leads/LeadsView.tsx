@@ -1,16 +1,32 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Plus, Search, Phone, Mail, Pencil, Trash2, ChevronRight, ArrowDown, ArrowUp, Filter, X, CalendarPlus } from "lucide-react";
+import { Plus, Phone, Mail, Trash2, CalendarPlus, Columns3, List } from "lucide-react";
+import LeadsKanban from "@/components/leads/LeadsKanban";
 import { Modal } from "@/components/ui/modal";
-import { Badge } from "@/components/ui/badge";
 import { LeadForm, type LeadFormData } from "@/components/leads/LeadForm";
 import LeadDrawer from "@/components/leads/LeadDrawer";
-import { LEAD_STATUSES, LEAD_SOURCES, LOSS_STATUSES, CHANNEL_ACCENT } from "@/lib/leadOptions";
+import CalendarModal, { toLocalInput } from "@/components/leads/CalendarModal";
+import { useStageGuard } from "@/components/tasks/useStageGuard";
+import { useAccess } from "@/lib/useAccess";
+import { can, canPage } from "@/lib/access";
+import { formatMoney, toEur } from "@/lib/currency";
+import { useFx } from "@/lib/useFx";
+import { leadDisplayName, hasRealName } from "@/lib/leadOptions";
+import MessengerIcon from "@/components/ui/MessengerIcon";
+import { timeAgo } from "@/lib/timeAgo";
+import { getFunnel, resolveStage, LEGACY_LOSS_REASONS, type CrmSettings } from "@/lib/crmSettings";
+import StageBar from "@/components/leads/StageBar";
+import CloseLeadModal from "@/components/leads/CloseLeadModal";
+import LeadSearchFilter, { type FilterOptions } from "@/components/leads/LeadSearchFilter";
+import FunnelPicker from "@/components/leads/FunnelPicker";
+import { EMPTY_FILTER, normalizeFilter, toFilterQuery, quickFilter, getValue, type LeadFilter, type QuickKind } from "@/lib/leadFilter";
+import { useCrmSettings } from "@/lib/useCrmSettings";
 import { useAdCampaigns } from "@/lib/useAdCampaigns";
-import { formatDistanceToNow } from "date-fns";
-import { uk } from "date-fns/locale";
+import { toastError } from "@/components/ui/toast";
+import ListPager, { usePager } from "@/components/ui/ListPager";
+import { PrivacyButton } from "@/components/ui/Privacy";
 
 // Convert UTC ISO string to Europe/Warsaw (UTC+2) for datetime-local input
 function toWarsawInput(utcStr: string): string {
@@ -20,6 +36,7 @@ function toWarsawInput(utcStr: string): string {
 
 interface Lead {
   id: string;
+  number: number;
   name: string;
   instagram: string | null;
   telegram: string | null;
@@ -30,6 +47,7 @@ interface Lead {
   geo: string | null;
   niche: string | null;
   amount: number | null;
+  currency?: string | null;
   status: string;
   siteStructure: string | null;
   hasExtraLang: boolean;
@@ -44,183 +62,37 @@ interface Lead {
   sourceDetail: string | null;
   calendarAt: string | null;
   calendarStatus: string | null;
+  funnelId: string | null;
+  closeReason: string | null;
   createdAt: string;
   updatedAt: string;
   _count: { tasks: number; deals: number };
 }
 
-const STATUS_OPTIONS = [
-  { value: "", label: "Всі статуси" },
-  ...LEAD_STATUSES.map((s) => ({ value: s.value, label: s.label })),
-];
+type Tab = "leads" | "deals";
+const TAB_STORAGE_KEY = "leads-tab";
+const FUNNEL_STORAGE_KEY = "leads-funnel";
+const VIEW_STORAGE_KEY = "leads-view";
+type View = "list" | "kanban";
 
-// Quick-add a lead to Google Calendar: pick date/time + event status label.
-const CALENDAR_STATUSES = ["НДЗ", "Перезвон", "Поставити КП", "КП", "Пуш"];
-
-function pad(n: number) {
-  return n.toString().padStart(2, "0");
-}
-
-function buildGCalUrl(lead: Lead, dateStr: string, timeStr: string, status: string): string {
-  // Floating local time — Google Calendar interprets it in the account's timezone.
-  const start = new Date(`${dateStr}T${timeStr || "09:00"}`);
-  const end = start; // тривалість події за замовчуванням 0 хв
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-  const title = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
-  const details = [
-    lead.instagram ? `Instagram: @${lead.instagram}` : "",
-    lead.telegram ? `Telegram: @${lead.telegram}` : "",
-    lead.source ? `Джерело: ${lead.source}` : "",
-    "AlphaCRM",
-  ].filter(Boolean).join("\n");
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: title,
-    dates: `${fmt(start)}/${fmt(end)}`,
-    details,
-  });
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-function CalendarModal({ lead, onClose, onSaved }: { lead: Lead; onClose: () => void; onSaved: () => void }) {
-  const now = new Date();
-  const hasEvent = !!lead.calendarAt;
-  const savedLocal = lead.calendarAt ? toWarsawInput(lead.calendarAt) : null;
-  const [date, setDate] = useState(savedLocal ? savedLocal.slice(0, 10) : now.toISOString().slice(0, 10));
-  const [time, setTime] = useState(savedLocal ? savedLocal.slice(11, 16) : `${pad(now.getHours())}:00`);
-  const [status, setStatus] = useState(lead.calendarStatus ?? CALENDAR_STATUSES[0]);
-  const [saving, setSaving] = useState(false);
-
-  const field = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors";
-  const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide";
-  const preview = [lead.name, lead.niche, lead.phone, status].filter(Boolean).join(" / ");
-
-  async function submit(openCalendar: boolean) {
-    setSaving(true);
-    try {
-      await fetch(`/api/leads/${lead.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ calendarAt: `${date}T${time || "09:00"}`, calendarStatus: status }),
-      });
-      if (openCalendar) {
-        window.open(buildGCalUrl(lead, date, time, status), "_blank", "noopener,noreferrer");
-      }
-      onSaved();
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeEvent() {
-    setSaving(true);
-    try {
-      await fetch(`/api/leads/${lead.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ calendarAt: null, calendarStatus: null }),
-      });
-      onSaved();
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
+// Compact colored stage chip (mobile cards).
+function StageChip({ settings, lead }: { settings: CrmSettings; lead: Lead }) {
+  const { stage, reason } = resolveStage(settings, lead);
   return (
-    <Modal open onClose={onClose} title={hasEvent ? "Редагувати подію" : "Додати в Google Календар"}>
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className={lbl}>Дата</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
-          </div>
-          <div>
-            <label className={lbl}>Час</label>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
-          </div>
-        </div>
-
-        <div>
-          <label className={lbl}>Статус події</label>
-          <div className="flex flex-wrap gap-1.5">
-            {CALENDAR_STATUSES.map((s) => {
-              const active = status === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatus(s)}
-                  className="px-3 py-1 rounded-lg text-xs transition-all cursor-pointer border"
-                  style={active
-                    ? { background: "var(--accent-subtle)", color: "var(--accent)", borderColor: "var(--accent)" }
-                    : { background: "var(--surface-2)", color: "var(--text-muted)", borderColor: "var(--border)" }}
-                >
-                  {s}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
-          <label className={lbl}>Назва події</label>
-          <div className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--text)] break-words">
-            {preview}
-          </div>
-        </div>
-
-        {hasEvent && (
-          <p className="text-[11px] text-[var(--text-dim)] leading-snug">
-            Зміни збережуться в CRM. Стару подію в самому Google Календарі за потреби видаліть або
-            перенесіть там вручну — «+ Календар» створює нову подію.
-          </p>
-        )}
-
-        <div className="flex items-center justify-between gap-2 pt-1">
-          {hasEvent ? (
-            <button
-              onClick={removeEvent}
-              disabled={saving}
-              className="text-xs text-red-400/80 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Прибрати подію
-            </button>
-          ) : <span />}
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
-              Скасувати
-            </button>
-            <button
-              onClick={() => submit(false)}
-              disabled={saving}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer disabled:opacity-50"
-              style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text)" }}
-            >
-              Зберегти
-            </button>
-            <button
-              onClick={() => submit(true)}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-black transition-colors cursor-pointer disabled:opacity-50"
-              style={{ background: "var(--accent)" }}
-            >
-              <CalendarPlus size={13} />
-              Зберегти + Календар
-            </button>
-          </div>
-        </div>
-      </div>
-    </Modal>
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap"
+      style={{ color: stage.color, borderColor: `${stage.color}40`, background: `${stage.color}18` }}
+    >
+      {reason ? `${stage.label} · ${reason.label}` : stage.label}
+    </span>
   );
 }
+
 
 // Small chip showing the scheduled calendar event on a lead row.
 function CalendarChip({ lead, onClick }: { lead: Lead; onClick: (e: React.MouseEvent) => void }) {
   if (!lead.calendarAt) return null;
-  const d = toWarsawInput(lead.calendarAt);
+  const d = toLocalInput(lead.calendarAt);
   const label = `${d.slice(8, 10)}.${d.slice(5, 7)} ${d.slice(11, 16)}`;
   return (
     <button
@@ -235,34 +107,27 @@ function CalendarChip({ lead, onClick }: { lead: Lead; onClick: (e: React.MouseE
   );
 }
 
-function ChannelChip({ channel }: { channel: string }) {
-  const accent = CHANNEL_ACCENT[channel] ?? "#26A5E4";
+// Blue meeting button in the list: no meeting → «Зустріч»; planned → its date and time (click = reschedule).
+function MeetButton({ lead, onClick }: { lead: Lead; onClick: () => void }) {
+  const planned = !!lead.calendarAt;
+  const d = planned ? toLocalInput(lead.calendarAt!) : "";
   return (
-    <span
-      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border"
-      style={{ color: accent, borderColor: `${accent}55`, background: `${accent}18` }}
+    <button
+      onClick={onClick}
+      title={planned ? `Зустріч${lead.calendarStatus ? ` «${lead.calendarStatus}»` : ""} — натисни, щоб перепланувати` : "Запланувати зустріч у Google Календарі"}
+      className="h-7 flex items-center gap-1.5 px-2.5 rounded-lg border text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer tabular-nums"
+      style={planned
+        ? { color: "#fff", background: "#4285F4", borderColor: "#4285F4" }
+        : { color: "#7aa7ff", background: "rgba(66,133,244,0.12)", borderColor: "rgba(66,133,244,0.35)" }}
     >
-      {channel}
-    </span>
+      <CalendarPlus size={13} />
+      {planned ? `${d.slice(8, 10)}.${d.slice(5, 7)} · ${d.slice(11, 16)}` : "Зустріч"}
+    </button>
   );
 }
 
-function InstagramLink({ username }: { username: string }) {
-  return (
-    <a
-      href={`https://instagram.com/${username}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className="flex items-center gap-1 text-xs hover:opacity-80 transition-opacity"
-      style={{ color: "#E4405F" }}
-    >
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-      </svg>
-      @{username}
-    </a>
-  );
+function ChannelChip({ channel }: { channel: string }) {
+  return <MessengerIcon channel={channel} size={11} title={`Спілкуємось у ${channel}`} />;
 }
 
 function TelegramLink({ username }: { username: string }) {
@@ -283,19 +148,19 @@ function TelegramLink({ username }: { username: string }) {
   );
 }
 
-function LeadsViewInner({ potential = false }: { potential?: boolean }) {
+function LeadsViewInner({ potential = false, openNumber }: { potential?: boolean; openNumber?: number }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
   const { campaigns: adCampaigns } = useAdCampaigns();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
-  const [campaignFilter, setCampaignFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  // Bitrix-style filter from the search panel (applied on «Знайти»).
+  const [filter, setFilterState] = useState<LeadFilter>(EMPTY_FILTER);
+  // «Ліди» = all leads, «Угоди» = only stages marked as deals in Налаштування.
+  const [tab, setTabState] = useState<Tab>("leads");
+  const { settings, loaded: settingsLoaded, save: saveSettings } = useCrmSettings();
+  const { fx } = useFx();
   const [showCreate, setShowCreate] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [calendarLead, setCalendarLead] = useState<Lead | null>(null);
@@ -303,35 +168,100 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt">("createdAt");
-  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [closingLead, setClosingLead] = useState<{ lead: Lead; kind?: "win" | "loss" } | null>(null);
+  const [view, setViewState] = useState<View>("list");
+  const [createStatus, setCreateStatus] = useState<string | null>(null); // quick «+» in a kanban column
+  const [funnelId, setFunnelIdState] = useState<string>("");
+
+  const filterKey = potential ? "potential-filter" : "leads-filter";
+
+  // Restore the last opened tab (per browser). Done after mount to avoid a hydration mismatch.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TAB_STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of localStorage after mount
+      if (saved === "leads" || saved === "deals") setTabState(saved);
+      const savedFunnel = localStorage.getItem(FUNNEL_STORAGE_KEY);
+      if (savedFunnel) setFunnelIdState(savedFunnel);
+      const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+      if (savedView === "list" || savedView === "kanban") setViewState(savedView);
+      const savedFilter = localStorage.getItem(filterKey);
+      if (savedFilter) setFilterState(normalizeFilter(JSON.parse(savedFilter)));
+    } catch {}
+  }, [filterKey]);
+
+  function setView(next: View) {
+    setViewState(next);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch {}
+  }
+
+  function setTab(next: Tab) {
+    setTabState(next);
+    try { localStorage.setItem(TAB_STORAGE_KEY, next); } catch {}
+  }
+
+  function setFunnelId(next: string) {
+    if (next === "__edit__") { router.push("/settings"); return; }
+    setFunnelIdState(next);
+    setFilter({ ...filter, values: { ...filter.values, stages: [], reasons: [] } }); // stages differ between funnels
+    try { localStorage.setItem(FUNNEL_STORAGE_KEY, next); } catch {}
+  }
+
+  // Applied filter is remembered per browser.
+  function setFilter(next: LeadFilter) {
+    setFilterState(next);
+    try { localStorage.setItem(filterKey, JSON.stringify(next)); } catch {}
+  }
+
+  const isDeals = !potential && tab === "deals";
+  // Funnels this user may see (until the role is loaded — all; the server filters anyway)
+  const { access, loaded: accessLoaded } = useAccess();
+  const visibleFunnels = accessLoaded ? settings.funnels.filter((f) => can(access, f.id, "view")) : settings.funnels;
+  const shownFunnelId = visibleFunnels.some((f) => f.id === funnelId) ? funnelId : visibleFunnels[0]?.id ?? funnelId;
+  const { funnel, filterOptions, quick, columnIds, filterParam } = useMemo(() => {
+    // Current funnel (falls back to the first one if the saved id no longer exists).
+    const funnel = getFunnel(settings, shownFunnelId);
+    // On «Угоди» only deal stages are offered / shown.
+    const base = isDeals ? funnel.stages.filter((s) => s.isDeal) : funnel.stages;
+    const inGroup = (kind: string) =>
+      !filter.group || (filter.group === "closed" ? kind !== "active" : filter.group === "active" ? kind === "active" : filter.group === kind);
+    let allowed = base.filter((s) => inGroup(s.kind)).map((s) => s.id);
+    const chosen = getValue<string[]>(filter, "stages");
+    const picked = chosen.filter((id) => allowed.includes(id));
+    if (chosen.length) allowed = picked; // chosen stages outside the tab/group → nothing matches
+    const constrained = isDeals || !!filter.group || chosen.length > 0;
+    const statuses = constrained ? (allowed.length ? allowed : ["__none__"]) : null;
+
+    const reasons = [...funnel.win.reasons, ...funnel.loss.reasons, ...LEGACY_LOSS_REASONS]
+      .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i);
+    const winIds = new Set(funnel.win.reasons.map((r) => r.id));
+    const filterOptions: FilterOptions = {
+      stages: base.map((s) => ({ value: s.id, label: s.label, accent: s.color })),
+      reasons: reasons.map((r) => ({ value: r.id, label: r.label, accent: winIds.has(r.id) ? "#22c55e" : "#f87171" })),
+      campaigns: [],
+    };
+    const ids = (kind: string) => base.filter((s) => s.kind === kind).map((s) => s.id);
+    const stageIds = { active: ids("active"), win: ids("win"), loss: ids("loss") };
+    const quick = (kind: QuickKind) => quickFilter(kind, stageIds);
+    return { funnel, filterOptions, quick, columnIds: statuses, filterParam: JSON.stringify(toFilterQuery(filter, statuses)) };
+  }, [settings, shownFunnelId, isDeals, filter]);
+  const funnelParam = potential || !settingsLoaded ? "" : funnel.id;
+  // what this user may do in the shown funnel
+  const canCreate = !accessLoaded || can(access, funnel.id, "create");
+  const canDelete = !accessLoaded || can(access, funnel.id, "delete");
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
     if (potential) params.set("potential", "1");
     if (search) params.set("q", search);
-    if (statusFilter) params.set("status", statusFilter);
-    if (sourceFilter) params.set("source", sourceFilter);
-    if (campaignFilter) params.set("campaign", campaignFilter);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
+    if (filterParam !== "{}") params.set("f", filterParam);
+    if (funnelParam) params.set("funnel", funnelParam);
     const res = await fetch(`/api/leads?${params}`);
     if (!res.ok) return;
     setLeads(await res.json());
     setLoading(false);
-  }, [potential, search, statusFilter, sourceFilter, campaignFilter, dateFrom, dateTo]);
-
-  const activeFilterCount =
-    (statusFilter ? 1 : 0) + (sourceFilter ? 1 : 0) + (campaignFilter ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
-
-  function resetFilters() {
-    setStatusFilter("");
-    setSourceFilter("");
-    setCampaignFilter("");
-    setDateFrom("");
-    setDateTo("");
-  }
+  }, [potential, search, filterParam, funnelParam]);
 
   useEffect(() => {
     setSearching(true);
@@ -344,23 +274,53 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
   useEffect(() => {
     const q = searchParams.get("q");
     const open = searchParams.get("open");
+    const v = searchParams.get("view");
     if (q) setSearch(q);
     if (open) setOpenLead(open);
-    if (q || open) router.replace(pathname, { scroll: false });
+    if (v === "kanban" || v === "list") setView(v);
+    if (q || open || v) router.replace(pathname, { scroll: false });
   }, [searchParams, router, pathname]);
+
+  // /leads/5 → open lead #5 (or say it was deleted)
+  const [missingNumber, setMissingNumber] = useState<{ n: number; deleted: boolean } | null>(null);
+  useEffect(() => {
+    if (!openNumber) return;
+    let cancelled = false;
+    fetch(`/api/leads/by-number/${openNumber}`)
+      .then((r) => r.json())
+      .then((d: { id?: string; deleted?: boolean }) => {
+        if (cancelled) return;
+        if (d.id) setOpenLead(d.id);
+        else setMissingNumber({ n: openNumber, deleted: !!d.deleted });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [openNumber]);
+
+  // The address bar follows the open card: /leads/5 while lead #5 is open, /leads after closing.
+  const syncUrl = !potential;
+  const leadLoaded = useCallback((n: number) => {
+    const target = `/leads/${n}`;
+    if (syncUrl && n && window.location.pathname !== target) window.history.replaceState(null, "", target);
+  }, [syncUrl]);
+  function closeLead() {
+    setOpenLead(null);
+    if (syncUrl && window.location.pathname !== "/leads") window.history.replaceState(null, "", "/leads");
+  }
 
   async function createLead(data: LeadFormData) {
     const res = await fetch("/api/leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ funnelId: potential ? undefined : funnel.id, ...data }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert("Помилка створення: " + (err.detail || err.error || res.status));
+      toastError("Помилка створення: " + (err.detail || err.error || res.status));
       return;
     }
     setShowCreate(false);
+    setCreateStatus(null);
     fetchLeads();
   }
 
@@ -373,10 +333,33 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert("Помилка збереження: " + (err.detail || err.error || res.status));
+      toastError("Помилка збереження: " + (err.detail || err.error || res.status));
       return;
     }
     setEditLead(null);
+    fetchLeads();
+  }
+
+  // Stage change from the list / kanban: first checks the unfinished tasks of the current stage.
+  const stageGuard = useStageGuard(() => fetchLeads());
+  function moveStage(lead: Lead, status: string) {
+    stageGuard.guard(lead, status, (s) => changeStatus(lead.id, s));
+  }
+
+  // Click on a stage-bar cell → move lead to that stage (optimistic).
+  async function changeStatus(id: string, status: string) {
+    const prev = leads;
+    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status, updatedAt: new Date().toISOString() } : l)));
+    const res = await fetch(`/api/leads/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      setLeads(prev);
+      toastError("Не вдалося змінити стадію");
+      return;
+    }
     fetchLeads();
   }
 
@@ -386,166 +369,136 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
     fetchLeads();
   }
 
-  const lossSet = new Set(LOSS_STATUSES);
-  const potentialAmount = leads.reduce((s, l) =>
-    l.status !== "WON" && !lossSet.has(l.status) ? s + (l.amount ?? 0) : s, 0);
-  const wonAmount = leads.reduce((s, l) => l.status === "WON" ? s + (l.amount ?? 0) : s, 0);
+  // «Потенційно» = only leads on the «КП» stage; «Зароблено» = won.
+  // Totals are in EUR: UAH / USD amounts are converted with the NBU rate from the header.
+  const potentialAmount = Math.round(leads.reduce((s, l) => resolveStage(settings, l).stage.id === "PROPOSAL" ? s + toEur(l.amount, l.currency, fx) : s, 0));
+  const wonAmount = Math.round(leads.reduce((s, l) => resolveStage(settings, l).stage.kind === "win" ? s + toEur(l.amount, l.currency, fx) : s, 0));
 
-  const sortedLeads = [...leads].sort((a, b) => {
-    const diff = new Date(a[sortBy]).getTime() - new Date(b[sortBy]).getTime();
-    return sortDir === "desc" ? -diff : diff;
-  });
+  // Newest first.
+  const sortedLeads = useMemo(
+    () => [...leads].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [leads]
+  );
+  // the list shows 30 rows (more on demand); in the kanban view the list isn't rendered at all
+  const pager = usePager(sortedLeads, potential ? "potential" : isDeals ? "deals" : "leads");
+  const pageLeads = view === "kanban" ? [] : pager.visible;
+
+  const stats = (
+    <>
+      {leads.length} {isDeals ? "угод в роботі" : "контактів"}
+      {potentialAmount > 0 && (
+        <span data-private="amount" className="ml-2 font-medium whitespace-nowrap" style={{ color: "var(--accent)" }}>
+          · €{potentialAmount.toLocaleString()} потенційно (КП)
+        </span>
+      )}
+      {wonAmount > 0 && (
+        <span data-private="amount" className="ml-2 font-medium whitespace-nowrap" style={{ color: "#22c55e" }}>
+          · €{wonAmount.toLocaleString()} зароблено
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-[var(--text)]">{potential ? "Potential" : "Leads"}</h1>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            {leads.length} контактів
-            {potentialAmount > 0 && (
-              <span className="ml-2 font-medium" style={{ color: "var(--accent)" }}>
-                · €{potentialAmount.toLocaleString()} потенційно
-              </span>
-            )}
-            {wonAmount > 0 && (
-              <span className="ml-2 font-medium" style={{ color: "#22c55e" }}>
-                · €{wonAmount.toLocaleString()} зароблено
-              </span>
-            )}
-          </p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold text-[var(--text)]">{potential ? "Potential" : isDeals ? "Угоди" : "Ліди"}</h1>
+          <p className="hidden sm:block text-xs text-[var(--text-muted)] mt-0.5">{stats}</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-black text-sm rounded-lg transition-colors cursor-pointer font-semibold"
-          style={{ background: "var(--accent)" }}
-        >
-          <Plus size={15} />
-          Новий лід
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-        <div className="relative flex-1 sm:max-w-xs">
-          {searching
-            ? <div className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
-            : <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-          }
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук..."
-            className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="flex-1 min-w-0 sm:flex-none px-3 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-
-          {/* Filters toggle */}
-          <button
-            onClick={() => setShowFilters((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors cursor-pointer shrink-0"
-            style={showFilters || activeFilterCount > 0
-              ? { background: "var(--accent-subtle)", borderColor: "var(--accent)", color: "var(--accent)" }
-              : { background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-muted)" }}
-          >
-            <Filter size={14} />
-            Фільтри
-            {activeFilterCount > 0 && (
-              <span className="ml-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center text-black" style={{ background: "var(--accent)" }}>
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {/* Sort switch */}
-          <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5 shrink-0">
-            <button
-              onClick={() => setSortBy("createdAt")}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "createdAt" ? "text-black font-medium" : "text-[var(--text-muted)]"}`}
-              style={sortBy === "createdAt" ? { background: "var(--accent)" } : {}}
-            >
-              Додано
-            </button>
-            <button
-              onClick={() => setSortBy("updatedAt")}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors cursor-pointer ${sortBy === "updatedAt" ? "text-black font-medium" : "text-[var(--text-muted)]"}`}
-              style={sortBy === "updatedAt" ? { background: "var(--accent)" } : {}}
-            >
-              Оновлено
-            </button>
-            <button
-              onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
-              className="p-1 text-[var(--text-muted)] transition-colors cursor-pointer"
-            >
-              {sortDir === "desc" ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Expandable filter panel ── */}
-      {showFilters && (
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 sm:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата від</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Дата до</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors" />
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Джерело</label>
-              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
-                <option value="">Всі джерела</option>
-                {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.value}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">Кампанія</label>
-              <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer">
-                <option value="">Всі кампанії</option>
-                {campaignFilter && !adCampaigns.some((c) => c.name === campaignFilter) && (
-                  <option value={campaignFilter}>{campaignFilter}</option>
-                )}
-                {adCampaigns.map((c) => <option key={c.id} value={c.name}>{c.name} · {c.trafficType}</option>)}
-              </select>
-            </div>
-          </div>
-          {activeFilterCount > 0 && (
-            <div className="flex justify-end mt-3">
-              <button onClick={resetFilters}
-                className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
-                <X size={12} /> Скинути фільтри
-              </button>
-            </div>
+        <div className="flex items-center gap-2 min-w-0">
+          <PrivacyButton />
+          {!potential && (
+            <FunnelPicker funnels={visibleFunnels} all={settings.funnels} value={funnel.id} onChange={setFunnelId}
+              onEdit={!accessLoaded || canPage(access, "settings") ? () => router.push("/settings") : undefined} />
           )}
+          {canCreate && <button
+            onClick={() => setShowCreate(true)}
+            title="Новий лід"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 min-h-9 text-black text-sm rounded-lg transition-colors cursor-pointer font-semibold shrink-0"
+            style={{ background: "var(--accent)" }}
+          >
+            <Plus size={15} />
+            <span className="hidden sm:inline">Новий лід</span>
+          </button>}
         </div>
+      </div>
+      {/* mobile: stats under the title, full width */}
+      <p className="sm:hidden -mt-1 text-xs text-[var(--text-muted)] leading-relaxed">{stats}</p>
+
+      {/* Toolbar: [Ліди | Угоди] [Пошук + фільтр] */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="flex items-center gap-2 sm:contents">
+        {!potential && (
+          <div className="flex-1 sm:flex-none flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5 shrink-0">
+            {([["leads", "Ліди"], ["deals", "Угоди"]] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setTab(value)}
+                className={`flex-1 sm:flex-none px-3.5 py-2 sm:py-1.5 text-sm rounded-md transition-colors cursor-pointer ${tab === value ? "text-black font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+                style={tab === value ? { background: "var(--accent)" } : {}}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* View: Канбан / Список */}
+        <div className="flex items-center gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5 shrink-0">
+          {([["kanban", "Канбан", Columns3], ["list", "Список", List]] as const).map(([value, label, Icon]) => (
+            <button
+              key={value}
+              onClick={() => setView(value)}
+              title={label}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-sm rounded-md transition-colors cursor-pointer ${view === value ? "bg-[var(--surface-2)] text-[var(--text)] font-medium" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
+            >
+              <Icon size={14} />
+              <span className="hidden lg:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+        </div>
+
+        <LeadSearchFilter
+          search={search}
+          onSearch={setSearch}
+          filter={filter}
+          onApply={setFilter}
+          options={{ ...filterOptions, campaigns: adCampaigns.map((c) => c.name) }}
+          quick={quick}
+          savedFilters={settings.savedFilters}
+          onSaveFilters={(savedFilters) => saveSettings({ ...settings, savedFilters })}
+          searching={searching}
+        />
+      </div>
+
+      {view === "kanban" && (
+        <LeadsKanban
+          leads={leads}
+          settings={settings}
+          funnel={funnel}
+          stageIds={columnIds}
+          loading={loading}
+          onOpen={setOpenLead}
+          onCalendar={setCalendarLead}
+          onDelete={(lead) => setConfirmDeleteId(lead.id)}
+          onMove={(lead, st) => moveStage(lead, st)}
+          onFinish={(lead, kind) => setClosingLead({ lead, kind })}
+          onQuickAdd={(st) => { setCreateStatus(st); setShowCreate(true); }}
+          canAdd={canCreate}
+          canDelete={canDelete}
+        />
       )}
 
       {/* ── Mobile cards (< sm) ── */}
-      <div className="block sm:hidden space-y-2">
+      <div className={view === "kanban" ? "hidden" : "block sm:hidden space-y-2"}>
         {loading ? (
           <p className="text-center py-10 text-sm text-[var(--text-muted)]">Завантаження...</p>
         ) : sortedLeads.length === 0 ? (
           <p className="text-center py-10 text-sm text-[var(--text-muted)]">Лідів немає</p>
-        ) : sortedLeads.map((lead) => (
+        ) : pageLeads.map((lead) => (
           <div
             key={lead.id}
             onClick={() => setOpenLead(lead.id)}
@@ -553,29 +506,22 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
           >
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="min-w-0">
-                <p className="font-medium text-[var(--text)] truncate">{lead.name}</p>
-                {lead.niche && <p className="text-xs text-[var(--text-muted)] truncate">{lead.niche}</p>}
+                <p data-private="name" className="font-medium text-[var(--text)] truncate">{leadDisplayName(lead)}</p>
+                {lead.niche && <p data-private="niche" className="text-xs text-[var(--text-muted)] truncate">{lead.niche}</p>}
               </div>
               <div className="shrink-0 flex items-center gap-1.5">
-                <Badge value={lead.status} />
+                <StageChip settings={settings} lead={lead} />
                 <button
                   onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }}
                   title="Додати в Google Календар"
-                  className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                  className="-m-1 p-2.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
                 >
-                  <CalendarPlus size={13} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setEditLead(lead); }}
-                  className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-                >
-                  <Pencil size={13} />
+                  <CalendarPlus size={15} />
                 </button>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {lead.instagram && <InstagramLink username={lead.instagram} />}
-              {lead.telegram && <TelegramLink username={lead.telegram} />}
+              {lead.telegram && <span data-private="contacts"><TelegramLink username={lead.telegram} /></span>}
               {lead.phone && (
                 <button
                   onClick={(e) => {
@@ -584,65 +530,61 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
                     setCopiedPhone(lead.id);
                     setTimeout(() => setCopiedPhone(null), 1500);
                   }}
+                  data-private="contacts"
                   className="flex items-center gap-1 text-xs text-[var(--text-muted)] cursor-pointer"
                 >
                   <Phone size={10} />
                   {copiedPhone === lead.id ? <span className="text-green-400">✓</span> : lead.phone}
                 </button>
               )}
-              {lead.source && <span className="text-xs text-[var(--text-muted)]">{lead.source}</span>}
+              {lead.source && <span data-private="source" className="text-xs text-[var(--text-muted)]">{lead.source}</span>}
               {lead.messenger && <ChannelChip channel={lead.messenger} />}
               <CalendarChip lead={lead} onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }} />
               {lead.amount ? (
-                <span className="text-xs font-semibold ml-auto" style={{ color: "var(--accent)" }}>
-                  €{lead.amount.toLocaleString()}
+                <span data-private="amount" className="text-xs font-semibold ml-auto" style={{ color: "var(--accent)" }}>
+                  {formatMoney(lead.amount, lead.currency)}
                 </span>
               ) : null}
             </div>
           </div>
         ))}
+        {!loading && view !== "kanban" && <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl"><ListPager pager={pager} noun={isDeals ? "угод" : "лідів"} className="border-t-0" /></div>}
       </div>
 
       {/* ── Desktop table (≥ sm) ── */}
-      <div className="hidden sm:block bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <div className={`${view === "kanban" ? "hidden" : "hidden sm:block"} bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-x-auto`}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)]">
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Ім'я</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Соцмережі</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Контакти</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Статус</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Джерело / Гео</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Сума</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-muted)]">Оновлено</th>
-              <th className="px-4 py-3" />
+              {["Лід", "Контакти", "Стадія", "Джерело", "Сума", "Оновлено"].map((h) => (
+                <th key={h} className="text-left px-3 py-2.5 text-[11px] font-medium text-[var(--text-muted)] whitespace-nowrap">{h}</th>
+              ))}
+              <th className="px-3 py-2.5" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">Завантаження...</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-[var(--text-muted)]">Завантаження...</td></tr>
             ) : sortedLeads.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">Лідів немає</td></tr>
-            ) : sortedLeads.map((lead) => (
+              <tr><td colSpan={7} className="text-center py-12 text-[var(--text-muted)]">{isDeals ? "Угод в роботі немає" : "Лідів немає"}</td></tr>
+            ) : pageLeads.map((lead) => (
               <tr
                 key={lead.id}
                 className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
                 onClick={() => setOpenLead(lead.id)}
               >
-                <td className="px-4 py-3">
-                  <div className="font-medium text-[var(--text)]">{lead.name}</div>
-                  {lead.niche && <div className="text-xs text-[var(--text-muted)] truncate max-w-[140px]">{lead.niche}</div>}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-1">
-                    {lead.instagram && <InstagramLink username={lead.instagram} />}
-                    {lead.telegram && <TelegramLink username={lead.telegram} />}
-                    {!lead.instagram && !lead.telegram && <span className="text-xs text-[var(--text-dim)]">—</span>}
+                {/* Лід: ім'я (або «Угода #4501») + ніша */}
+                <td className="px-3 py-2">
+                  <div data-private="name" title={leadDisplayName(lead)} className={`text-[13px] font-medium truncate max-w-[240px] leading-tight ${hasRealName(lead) ? "text-[var(--text)]" : "text-[var(--text-muted)]"}`}>
+                    {leadDisplayName(lead)}
                   </div>
+                  {lead.niche && <div data-private="niche" className="text-[11px] text-[var(--text-muted)] truncate max-w-[160px] leading-tight mt-0.5">{lead.niche}</div>}
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-0.5">
-                    {lead.phone && (
+
+                {/* Контакти: телефон (клік — копіювати) + месенджер, під ним Telegram. Instagram не показуємо. */}
+                <td className="px-3 py-2">
+                  <div data-private="contacts" className="flex items-center gap-1.5 w-fit">
+                    {lead.phone ? (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -650,68 +592,85 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
                           setCopiedPhone(lead.id);
                           setTimeout(() => setCopiedPhone(null), 1500);
                         }}
-                        className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors cursor-pointer"
+                        className="flex items-center gap-1 text-xs text-[var(--text)] hover:text-[var(--accent)] transition-colors cursor-pointer whitespace-nowrap"
+                        title="Скопіювати"
                       >
-                        <Phone size={10} />
+                        <Phone size={10} className="text-[var(--text-muted)]" />
                         {copiedPhone === lead.id ? <span className="text-green-400">✓ Скопійовано</span> : lead.phone}
                       </button>
+                    ) : lead.email ? (
+                      <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Mail size={10} />{lead.email}</span>
+                    ) : (
+                      <span className="text-xs text-[var(--text-dim)]">—</span>
                     )}
-                    {lead.email && <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]"><Mail size={10} />{lead.email}</span>}
-                    {!lead.phone && !lead.email && <span className="text-xs text-[var(--text-dim)]">—</span>}
+                    {lead.messenger && <ChannelChip channel={lead.messenger} />}
                   </div>
+                  {lead.telegram && <div data-private="contacts" className="mt-0.5 w-fit"><TelegramLink username={lead.telegram} /></div>}
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col items-start gap-1">
-                    <Badge value={lead.status} />
-                    <CalendarChip lead={lead} onClick={(e) => { e.stopPropagation(); setCalendarLead(lead); }} />
-                  </div>
+
+                {/* Стадія — сегментована смужка, клік по сегменту змінює стадію */}
+                <td className="px-3 py-2">
+                  <StageBar
+                    resolved={resolveStage(settings, lead)}
+                    onChange={(st) => moveStage(lead, st)}
+                    onFinish={() => setClosingLead({ lead })}
+                  />
                 </td>
-                <td className="px-4 py-3">
-                  <div className="text-xs text-[var(--text-muted)]">{lead.source ?? "—"}</div>
-                  {lead.geo && <div className="text-xs text-[var(--text-dim)]">{lead.geo}</div>}
-                  {lead.messenger && <div className="mt-1"><ChannelChip channel={lead.messenger} /></div>}
+
+                {/* Джерело + кампанія (локацію не показуємо) */}
+                <td className="px-3 py-2">
+                  <div data-private="source" title={lead.source ?? ""} className="text-xs text-[var(--text)] truncate max-w-[150px] leading-tight">{lead.source ?? "—"}</div>
+                  {lead.sourceDetail && <div data-private="source" className="text-[11px] text-[var(--text-muted)] truncate max-w-[150px] leading-tight mt-0.5">{lead.sourceDetail}</div>}
                 </td>
-                <td className="px-4 py-3">
+
+                <td className="px-3 py-2">
                   {lead.amount
-                    ? <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>€{lead.amount.toLocaleString()}</span>
+                    ? <span data-private="amount" className="text-xs font-semibold whitespace-nowrap" style={{ color: "var(--accent)" }}>{formatMoney(lead.amount, lead.currency)}</span>
                     : <span className="text-xs text-[var(--text-dim)]">—</span>}
                 </td>
-                <td className="px-4 py-3 text-xs text-[var(--text-muted)]">
-                  {formatDistanceToNow(new Date(lead.updatedAt), { addSuffix: true, locale: uk })}
+                <td className="px-3 py-2 text-xs text-[var(--text-muted)] whitespace-nowrap" title={new Date(lead.updatedAt).toLocaleString("uk-UA")}>
+                  {timeAgo(lead.updatedAt)}
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => setCalendarLead(lead)}
-                      title={lead.calendarAt ? "Редагувати подію" : "Додати в Google Календар"}
-                      className="p-1.5 rounded hover:bg-[var(--border)] transition-colors cursor-pointer"
-                      style={{ color: lead.calendarAt ? "#4285F4" : "var(--text-muted)" }}
+                {/* Дії: зустріч (запланована → дата/час, клік — перепланувати) + видалити */}
+                <td className="pl-3 pr-5 py-2 w-px">
+                  <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <MeetButton lead={lead} onClick={() => setCalendarLead(lead)} />
+                    {canDelete && <button
+                      onClick={() => setConfirmDeleteId(lead.id)}
+                      title="Видалити"
+                      aria-label="Видалити"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg border transition-colors cursor-pointer text-red-400 bg-red-500/10 border-red-500/25 hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-300"
                     >
-                      <CalendarPlus size={13} />
-                    </button>
-                    <button onClick={() => setEditLead(lead)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer">
-                      <Pencil size={13} />
-                    </button>
-                    <button onClick={() => setConfirmDeleteId(lead.id)} className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--border)] transition-colors cursor-pointer">
                       <Trash2 size={13} />
-                    </button>
-                    <ChevronRight size={13} className="text-[var(--text-muted)]" />
+                    </button>}
                   </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {!loading && view !== "kanban" && <ListPager pager={pager} noun={isDeals ? "угод" : "лідів"} />}
       </div>
 
+      {stageGuard.modal}
+
       {/* Modals */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Новий лід" size="xl">
-        <LeadForm onSave={createLead} onCancel={() => setShowCreate(false)} />
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setCreateStatus(null); }} title="Новий лід" size="xl">
+        {showCreate && (
+          <LeadForm
+            key={createStatus ?? "new"}
+            onSave={createLead}
+            onCancel={() => { setShowCreate(false); setCreateStatus(null); }}
+            funnelId={potential ? null : funnel.id}
+            initial={createStatus ? { status: createStatus } : undefined}
+          />
+        )}
       </Modal>
 
       <Modal open={!!editLead} onClose={() => setEditLead(null)} title="Редагувати ліда" size="xl">
         {editLead && (
           <LeadForm
+            funnelId={editLead.funnelId}
             onSave={updateLead}
             onCancel={() => setEditLead(null)}
             initial={{
@@ -726,6 +685,7 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
               geo: editLead.geo ?? "",
               niche: editLead.niche ?? "",
               amount: editLead.amount?.toString() ?? "",
+              currency: editLead.currency ?? "EUR",
               status: editLead.status,
               siteStructure: editLead.siteStructure ?? "",
               hasExtraLang: editLead.hasExtraLang ?? false,
@@ -745,11 +705,49 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
       </Modal>
 
       {openLead && (
-        <LeadDrawer leadId={openLead} onClose={() => setOpenLead(null)} onUpdate={fetchLeads} />
+        <LeadDrawer
+          key={openLead}
+          leadId={openLead}
+          onClose={closeLead}
+          onUpdate={fetchLeads}
+          onOpenLead={setOpenLead}
+          onLoaded={leadLoaded}
+        />
+      )}
+
+      {missingNumber && (
+        <Modal open onClose={() => { setMissingNumber(null); closeLead(); }} title={`Лід #${missingNumber.n}`}>
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--text-muted)]">
+              {missingNumber.deleted
+                ? <>Лід <b className="text-[var(--text)]">#{missingNumber.n}</b> було видалено. Номер за ним закріплений і більше нікому не видається.</>
+                : <>Ліда з номером <b className="text-[var(--text)]">#{missingNumber.n}</b> ще не існує.</>}
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => { setMissingNumber(null); closeLead(); }}
+                className="px-4 py-1.5 text-xs font-semibold rounded-lg text-black cursor-pointer"
+                style={{ background: "var(--accent)" }}
+              >
+                До списку лідів
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {closingLead && (
+        <CloseLeadModal
+          lead={closingLead.lead}
+          initialKind={closingLead.kind}
+          funnel={getFunnel(settings, closingLead.lead.funnelId)}
+          onClose={() => setClosingLead(null)}
+          onDone={fetchLeads}
+        />
       )}
 
       {calendarLead && (
-        <CalendarModal lead={calendarLead} onClose={() => setCalendarLead(null)} onSaved={fetchLeads} />
+        <CalendarModal lead={calendarLead} onClose={() => setCalendarLead(null)} onSaved={() => fetchLeads()} />
       )}
 
       {/* Delete confirmation */}
@@ -778,10 +776,10 @@ function LeadsViewInner({ potential = false }: { potential?: boolean }) {
 
 // Спільний вигляд для вкладок Leads та Potential (potential — гарячі стадії + пуші).
 // useSearchParams вимагає Suspense-межу на статично згенерованій сторінці.
-export default function LeadsView({ potential = false }: { potential?: boolean }) {
+export default function LeadsView({ potential = false, openNumber }: { potential?: boolean; openNumber?: number }) {
   return (
     <Suspense fallback={null}>
-      <LeadsViewInner potential={potential} />
+      <LeadsViewInner potential={potential} openNumber={openNumber} />
     </Suspense>
   );
 }

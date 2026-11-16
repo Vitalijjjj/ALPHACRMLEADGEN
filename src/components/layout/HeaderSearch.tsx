@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft } from "lucide-react";
-import { LEAD_STATUS_BADGE, LEAD_STATUS_BADGE_LABEL } from "@/lib/leadOptions";
+import { leadDisplayName } from "@/lib/leadOptions";
+import { resolveStage } from "@/lib/crmSettings";
+import { useCrmSettings } from "@/lib/useCrmSettings";
 
 interface LeadHit {
   id: string;
   name: string;
   status: string;
+  funnelId: string | null;
+  closeReason: string | null;
   instagram: string | null;
   telegram: string | null;
   phone: string | null;
@@ -22,6 +26,7 @@ const MAX_RESULTS = 8;
 // (↑/↓/Enter/Esc), ⌘K / Ctrl+K — фокус. Клік по результату відкриває ліда на /leads.
 export default function HeaderSearch() {
   const router = useRouter();
+  const { settings } = useCrmSettings();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LeadHit[]>([]);
   const [open, setOpen] = useState(false);
@@ -119,7 +124,7 @@ export default function HeaderSearch() {
   const showDropdown = open && query.trim().length >= 2;
 
   return (
-    <div ref={boxRef} style={{ flex: 1, maxWidth: 280, position: "relative" }}>
+    <div ref={boxRef} style={{ flex: 1, maxWidth: 560, position: "relative" }}>
       <Search
         size={13}
         style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }}
@@ -202,7 +207,7 @@ export default function HeaderSearch() {
                   >
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {lead.name}
+                        {leadDisplayName(lead)}
                       </span>
                       {contact && (
                         <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -210,11 +215,17 @@ export default function HeaderSearch() {
                         </span>
                       )}
                     </span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium border shrink-0 ${LEAD_STATUS_BADGE[lead.status] ?? "bg-zinc-500/10 text-zinc-400 border-zinc-400/20"}`}
-                    >
-                      {LEAD_STATUS_BADGE_LABEL[lead.status] ?? lead.status}
-                    </span>
+                    {(() => {
+                      const { stage } = resolveStage(settings, lead);
+                      return (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded font-medium border shrink-0"
+                          style={{ color: stage.color, borderColor: `${stage.color}40`, background: `${stage.color}18` }}
+                        >
+                          {stage.label}
+                        </span>
+                      );
+                    })()}
                   </button>
                 );
               })}

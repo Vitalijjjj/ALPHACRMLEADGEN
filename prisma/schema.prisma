@@ -11,6 +11,8 @@ datasource db {
 model Lead {
   id          String     @id @default(cuid())
   name        String
+  projectName String?    // назва проєкту (угоди «Операційки»); name — контакт
+  payer       String?    // платник — на кого робимо інвойс (компанія / ПІБ)
   instagram   String?
   telegram    String?
   phone       String?
@@ -21,6 +23,7 @@ model Lead {
   geo         String?
   niche       String?
   amount      Float?
+  currency    String     @default("EUR") // валюта суми: EUR | UAH | USD
   tags        String[]
   status      String     @default("NEW_LEAD")
   lastContact DateTime?
@@ -40,12 +43,27 @@ model Lead {
   messenger        String?
   calendarAt       DateTime?
   calendarStatus   String?
+  funnelId         String?    // воронка (null = перша воронка з налаштувань)
+  closeReason      String?    // причина виграшу / програшу (id з налаштувань)
+  closedAt         DateTime?  // коли лід перевели у виграш / програш
+  kpAt             DateTime?
+  partnerId        String?    // лід від партнера: id угоди у воронці «Партнери» (для звіту «Партнери»)
+  caseUrl          String?    // посилання на готовий (бойовий) сайт — для «Кейсів»  // коли комерційна пропозиція (задача «Провести КП» стає на цей час)
+  legacyStatus     String?    // стара стадія до перенесення на нову воронку (для відкату)
+  customFields     Json       @default("{}") // значення полів воронки (id поля → значення)
+  number           Int        @unique @default(autoincrement()) // порядковий номер ліда (#1, #2…), не перевикористовується
+  sourceLeadId     String?    // з якого ліда створено передачею (бізнес-процес)
+  sourceLeadNumber Int?       // номер того ліда (щоб показати навіть якщо його видалили)
+  links            String[]   @default([]) // вручну зв'язані угоди (id, в обидва боки)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
   tasks      Task[]
   activities Activity[]
   deals      Deal[]
+  paymentStages PaymentStage[]
+  transactions  Transaction[]
+  projects      Project[]
 }
 
 
@@ -83,6 +101,11 @@ model Task {
   assignee    String?
   remindAt    DateTime?
   remindSent  Boolean    @default(false)
+  // Автозадачі стадій (Налаштування → Задачі): яке правило її створило, тип і стадія ліда на момент створення
+  autoRuleId  String?
+  autoKind    String?    // step | meeting | repeat | final
+  autoStage   String?
+  completedAt DateTime?
   leadId      String?
   lead        Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
   dealId      String?
@@ -112,6 +135,8 @@ model Activity {
   lead      Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   dealId    String?
   deal      Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  pinned    Boolean? // comments: true = pinned on top, false = unpinned; null = auto (the first comment is pinned)
+  editedAt  DateTime?
   createdAt DateTime     @default(now())
 }
 
@@ -145,6 +170,7 @@ model AdCampaign {
 model PushTemplate {
   id        String   @id @default(cuid())
   title     String?
+  category  String?  // «Пуші», «Клієнти»… — кнопки-фільтри на сторінці
   text      String
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
@@ -186,4 +212,130 @@ enum RecipientStatus {
   ERROR
   NOT_FOUND
   SKIPPED
+}
+
+// Key/value settings of the CRM (e.g. which lead stages count as "deals in progress").
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// Користувачі CRM (крім власника з ADMIN_EMAIL). Роль — id з налаштувань (Setting "crm" → access.roles).
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  roleId       String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ── Фінанси (вкладка «Оплати») ──
+
+// Графік оплат угоди: «1-а оплата 30 000 до 15.11», … Оплачений етап має paidAt (і транзакцію з stageId).
+model PaymentStage {
+  id        String    @id @default(cuid())
+  leadId    String?   // null — запланована оплата без проєкту
+  lead      Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  idx       Int       @default(0)
+  currency  String?   // для оплат без проєкту (у проєкту — валюта угоди)
+  payer     String?   // від кого (для оплат без проєкту)
+  title     String?
+  amount    Float
+  dueDate   DateTime?
+  paidAt    DateTime?
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([leadId])
+}
+
+// Журнал руху грошей (як вкладка «Гроші» у фінтаблиці).
+// kind: income (отримали оплату) | contractor (оплатили підряднику) | expense (витрати бізнесу)
+//       | transfer (переказ між рахунками) | owner (виплата власнику)
+model Transaction {
+  id           String   @id @default(cuid())
+  date         DateTime
+  kind         String
+  amount       Float
+  currency     String   @default("UAH")
+  rate         Float    @default(1)    // курс до гривні на дату
+  amountUah    Float
+  accountId    String                  // рахунок (id з налаштувань фінансів)
+  toAccountId  String?                 // для переказу — куди
+  leadId       String?                 // угода (береться з проєкту, якщо він зв'язаний)
+  lead         Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  projectId    String?                 // проєкт / клієнт (як «Проєкт» у фінтаблиці)
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  stageId      String?                 // який етап графіка оплат закриває
+  counterparty String?
+  category     String?                 // категорія витрат бізнесу
+  recurringId  String?                 // створено автосписанням (співробітник / підписка)
+  parentId     String?                 // податок 6% → дохід, з якого він рахується
+  adCampaignId String?                 // реклама → кампанія (для ціни ліда / клієнта)
+  comment      String?
+  period       String?                 // ручний період yyyy-mm (інакше — за датою, місяць з 10-го по 9-те)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([date])
+  @@index([leadId])
+  @@index([projectId])
+  @@index([adCampaignId])
+}
+
+// Проєкт / клієнт для фінансів (як «Проєкти» у фінтаблиці). Можна зв'язати з угодою —
+// тоді вартість = сума угоди, а операції проєкту видно в картці угоди.
+model Project {
+  id           String        @id @default(cuid())
+  name         String
+  client       String?
+  value        Float?        // вартість (коли угода не зв'язана)
+  currency     String        @default("UAH") // валюта вартості: UAH | EUR | USD
+  note         String?
+  leadId       String?
+  lead         Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdBy    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@index([leadId])
+}
+
+// Автосписання: зарплата співробітника або підписка — щомісяця в заданий день створює витрату.
+model Recurring {
+  id         String   @id @default(cuid())
+  type       String   // employee | subscription
+  every      String   @default("month") // як часто списуємо: month | quarter | year
+  month      Int?     // місяць списання (1–12) для quarter / year
+  uahAmount  Float?   // $ / € з гривневої карти: скільки реально списують у гривні (порожньо — за курсом НБУ)
+  payMode    String   @default("monthly") // monthly — щомісячне автосписання | project — платимо попроєктно (без автосписання)
+  name       String
+  role       String?  // посада / що це за сервіс
+  amount     Float
+  currency   String   @default("UAH")
+  accountId  String
+  day        Int      @default(10) // число місяця
+  category   String?
+  active     Boolean  @default(true)
+  activeFrom DateTime @default(now()) // з цієї дати списуємо (після вмикання — без «боргів» за паузу)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// «Кейси», додані вручну без проєкту. Після «Зв'язати з проєктом» посилання переходить у Lead.caseUrl, а рядок видаляється.
+model CaseLink {
+  id        String   @id @default(cuid())
+  url       String
+  title     String?
+  niche     String?
+  geo       String?
+  createdAt DateTime @default(now())
 }

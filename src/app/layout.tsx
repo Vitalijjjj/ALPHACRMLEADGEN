@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
@@ -8,6 +8,16 @@ const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CRM",
   description: "Dark CRM System",
+  appleWebApp: { capable: true, title: "Alpha CRM", statusBarStyle: "black-translucent" },
+};
+
+// phones: no auto-zoom on inputs, content under the notch / home bar handled with safe-area insets
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#060606",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

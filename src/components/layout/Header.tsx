@@ -1,25 +1,13 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMobileMenu } from "@/lib/useMobileMenu";
 import HeaderSearch from "@/components/layout/HeaderSearch";
-
-const pageTitles: Record<string, string> = {
-  "/": "Dashboard",
-  "/leads": "Leads",
-  "/pipeline": "Pipeline",
-  "/potential": "Potential",
-  "/clients": "Clients",
-  "/tasks": "Tasks",
-  "/campaigns": "Campaigns",
-  "/ads": "Реклама",
-  "/pushes": "Пуші",
-};
+import FxRate from "@/components/layout/FxRate";
+import NotificationsBell from "@/components/layout/NotificationsBell";
 
 export default function Header() {
-  const path = usePathname();
   const [time, setTime] = useState("");
   const { toggle } = useMobileMenu();
 
@@ -33,15 +21,10 @@ export default function Header() {
     return () => clearInterval(id);
   }, []);
 
-  const title = Object.entries(pageTitles)
-    .sort((a, b) => b[0].length - a[0].length)
-    .find(([href]) => (href === "/" ? path === "/" : path.startsWith(href)))?.[1] ?? "CRM";
-
-  const segments = title === "Dashboard" ? ["Dashboard"] : ["Dashboard", title];
-
-  const dateStr = new Date().toLocaleDateString("en-US", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
+  // Live clock with weekday — e.g. «Середа, 11 листопада · 20:23:15».
+  const now = time ? new Date() : null;
+  const weekday = now?.toLocaleDateString("uk-UA", { weekday: "long" }) ?? "";
+  const day = now?.toLocaleDateString("uk-UA", { day: "numeric", month: "long" }) ?? "";
 
   return (
     <header
@@ -50,6 +33,7 @@ export default function Header() {
         alignItems: "center",
         gap: 12,
         padding: "12px 16px",
+        paddingTop: "calc(12px + env(safe-area-inset-top))",
         flexShrink: 0,
         position: "relative",
         zIndex: 40, // вище за контентні картки (z-10), щоб дропдаун пошуку не ховався під ними
@@ -81,75 +65,31 @@ export default function Header() {
         <Menu size={18} />
       </button>
 
-      {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, flexShrink: 0 }}>
-        {segments.map((seg, i) => (
-          <span key={seg} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {i > 0 && <span style={{ color: "var(--text-dim)" }}>/</span>}
-            <span style={{ fontWeight: i === segments.length - 1 ? 600 : 400, color: i === segments.length - 1 ? "var(--text)" : "var(--text-muted)" }}>
-              {seg}
-            </span>
-          </span>
-        ))}
-      </div>
-
       {/* Search — прихований на дуже малих екранах через flex shrink */}
       <HeaderSearch />
 
-      {/* Clock — прихований через CSS на мобільному */}
-      <div className="header-clock" style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-        {time}
-      </div>
-
-      {/* Date — прихований через CSS на мобільному */}
-      <div className="header-date" style={{ fontSize: 11, fontWeight: 500, color: "var(--accent)", whiteSpace: "nowrap" }}>
-        {dateStr}
-      </div>
-
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-        {/* Bell */}
-        <button
-          style={{
-            position: "relative",
-            width: 36, height: 36,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            borderRadius: 10,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-          }}
-        >
-          <Bell size={14} />
-          <span
-            style={{
-              position: "absolute", top: 6, right: 6,
-              width: 6, height: 6, borderRadius: "50%",
-              background: "var(--accent)",
-              boxShadow: "0 0 6px var(--accent-glow)",
-            }}
-          />
-        </button>
+        {/* NBU rate (EUR/USD → UAH) with a manual refresh */}
+        <FxRate />
 
-        {/* Avatar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-          <div
-            className="header-user-name"
-            style={{ textAlign: "right" }}
-          >
-            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Admin</p>
-          </div>
-          <div
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 12, fontWeight: 700, color: "#000", flexShrink: 0,
-              background: "var(--accent)",
-              boxShadow: "0 0 14px var(--accent-glow)",
-            }}
-          >
-            S
-          </div>
+        {/* Bell: overdue / today's / upcoming tasks */}
+        <NotificationsBell />
+
+        {/* Clock: weekday + date + ticking time (replaces the old «S Admin» avatar) */}
+        <div
+          className="header-clock"
+          style={{
+            alignItems: "center", gap: 10, height: 36, padding: "0 12px", borderRadius: 10,
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", whiteSpace: "nowrap",
+          }}
+          title={now?.toLocaleString("uk-UA") ?? ""}
+        >
+          <span className="header-date" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            <span style={{ color: "var(--accent)", fontWeight: 600, textTransform: "capitalize" }}>{weekday}</span>
+            <span style={{ margin: "0 6px", color: "var(--text-dim)" }}>·</span>
+            {day}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{time}</span>
         </div>
       </div>
     </header>

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useCrmSettings } from "@/lib/useCrmSettings";
 
 interface TaskFormProps {
   onSave: (data: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
+  initialDeadline?: string; // yyyy-MM-ddTHH:mm
 }
 
 // Швидкі шаблони назви задачі
@@ -16,28 +18,28 @@ const TASK_TEMPLATES = [
   "Дати звіт",
 ];
 
-// Понеділок наступного тижня (yyyy-MM-dd) — дефолтний дедлайн
-function nextMonday(): string {
+// Завтра о 13:00 (yyyy-MM-ddTHH:mm, час браузера) — дефолтний дедлайн
+function tomorrow13(): string {
   const d = new Date();
-  const shift = ((8 - d.getDay()) % 7) || 7;
-  d.setDate(d.getDate() + shift);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T13:00`;
 }
 
-export function TaskForm({ onSave, onCancel }: TaskFormProps) {
+export function TaskForm({ onSave, onCancel, initialDeadline }: TaskFormProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [deadline, setDeadline] = useState(nextMonday());
+  const { settings } = useCrmSettings();
+  const [deadline, setDeadline] = useState(initialDeadline ?? tomorrow13());
   const [remindAt, setRemindAt] = useState("");
   const [priority, setPriority] = useState("HIGH");
-  const [assignee, setAssignee] = useState("Артур");
+  const [assignee, setAssignee] = useState(settings.tasks.defaultAssignee);
   const [saving, setSaving] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({ title, description, deadline: deadline || null, remindAt: remindAt || null, priority, status: "TODO", assignee: assignee || null });
+      await onSave({ title, description, deadline: deadline ? new Date(deadline).toISOString() : null, remindAt: remindAt ? new Date(remindAt).toISOString() : null, priority, status: "TODO", assignee: assignee || null });
     } finally {
       setSaving(false);
     }
@@ -82,9 +84,9 @@ export function TaskForm({ onSave, onCancel }: TaskFormProps) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="text-xs text-[var(--text-muted)]">Дедлайн</label>
+          <label className="text-xs text-[var(--text-muted)]">Дедлайн (дата і час)</label>
           <input
-            type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
+            type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)}
             className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
@@ -104,7 +106,7 @@ export function TaskForm({ onSave, onCancel }: TaskFormProps) {
       <div className="space-y-1">
         <label className="text-xs text-[var(--text-muted)]">Відповідальний</label>
         <div className="flex gap-2">
-          {["Артур"].map((name) => (
+          {settings.tasks.assignees.map((name) => (
             <button
               key={name}
               type="button"

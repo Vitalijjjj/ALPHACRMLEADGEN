@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAccess } from "@/lib/accessServer";
 import { db, ensureSchema } from "@/lib/db";
-import { normalizeTrafficType } from "@/lib/leadOptions";
+import { getAdSettings } from "@/lib/adTypesServer";
+import { findType } from "@/lib/adTypes";
 import { syncCampaignsFromLeads } from "@/lib/adStats";
 
 export async function GET() {
@@ -22,13 +24,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAccess("ads");
+  if ("error" in gate) return gate.error;
 
   try {
     const body = await req.json();
     const name = String(body.name ?? "").trim();
-    const trafficType = normalizeTrafficType(body.trafficType) ?? "Таргет";
+    const settings = await getAdSettings();
+    const trafficType = findType(settings, body.trafficType)?.name ?? settings.types[0].name;
     if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
     await ensureSchema();

@@ -1,13 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { LEAD_STATUSES as STATUSES, LEAD_SOURCES as SOURCES, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS, normalizeTrafficType } from "@/lib/leadOptions";
+import { CURRENCIES, CURRENCY_SYMBOL } from "@/lib/currency";
+import { getFunnel, resolveStage } from "@/lib/crmSettings";
+import { cleanPhone } from "@/lib/leadFilter";
+import { useCrmSettings } from "@/lib/useCrmSettings";
+import { PAYMENT_SYSTEMS, UPSELL_SERVICES, LEAD_SERVICES as SERVICES, COMMUNICATION_CHANNELS } from "@/lib/leadOptions";
 import { useAdCampaigns } from "@/lib/useAdCampaigns";
+import { groupNum } from "@/lib/numInput";
+import { useLeadSources } from "@/lib/useLeadSources";
 
 interface LeadFormProps {
   onSave: (data: LeadFormData) => Promise<void>;
   onCancel: () => void;
   initial?: Partial<LeadFormData>;
+  funnelId?: string | null; // stages in the «Статус» select come from this funnel
 }
 
 export interface LeadFormData {
@@ -22,6 +29,7 @@ export interface LeadFormData {
   geo: string;
   niche: string;
   amount: string;
+  currency?: string; // EUR | UAH | USD
   status: string;
   siteStructure: string;
   hasExtraLang: boolean;
@@ -39,16 +47,17 @@ export interface LeadFormData {
 }
 
 const SHOP_SERVICES = ["ШБ Інтернет магазин", "Індив Інтернет магазин"];
-const PAYMENT_SYSTEMS = ["MonoPay", "LiqPay", "WayForPay", "Fondy", "Portmone", "Інше"];
 
-export const ALL_UPSELL_SERVICES = [
-  "Google Ads", "Target Ads", "SEO", "Google Maps", "Branding", "TikTok Ads", "Graphic Design",
-];
+export const ALL_UPSELL_SERVICES = UPSELL_SERVICES;
 
 const f = "w-full px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-[var(--text-dim)]";
 const lbl = "block text-[10px] font-medium text-[var(--text-muted)] mb-0.5 uppercase tracking-wide";
 
-export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
+export function LeadForm({ onSave, onCancel, initial, funnelId }: LeadFormProps) {
+  const { settings } = useCrmSettings();
+  const funnel = getFunnel(settings, funnelId);
+  const [statusTouched, setStatusTouched] = useState(false);
+  const { sources: SOURCES, adTypeOf } = useLeadSources();
   const [data, setData] = useState<LeadFormData>({
     name: initial?.name ?? "",
     instagram: initial?.instagram ?? "",
@@ -61,6 +70,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     geo: initial?.geo ?? "",
     niche: initial?.niche ?? "",
     amount: initial?.amount ?? "",
+    currency: initial?.currency ?? "EUR",
     status: initial?.status ?? "NEW_LEAD",
     siteStructure: initial?.siteStructure ?? "",
     hasExtraLang: initial?.hasExtraLang ?? false,
@@ -93,6 +103,14 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     }));
   }
 
+  // Status options: working stages of the funnel. A closed lead keeps its win/loss stage
+  // (closing with a reason happens via the stage bar / lead card, not here).
+  const current = resolveStage(settings, { status: data.status, funnelId });
+  const statusOptions = funnel.stages.filter((s) => s.kind === "active" || s.id === current.stage.id);
+  const statusSelect = statusOptions.some((s) => s.id === current.stage.id) ? current.stage.id : statusOptions[0]?.id ?? "";
+  // Untouched → keep the stored value as is (old status codes stay intact).
+  const statusValue = !statusTouched && statusSelect === current.stage.id ? data.status : statusSelect;
+
   const isShop = SHOP_SERVICES.includes(data.service);
   const upsell = ALL_UPSELL_SERVICES.filter((s) => !data.usedServices.includes(s));
 
@@ -102,6 +120,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
     try {
       await onSave({
         ...data,
+        status: statusValue,
         paymentSystem: isShop ? (data.paymentSystem === "Інше" ? data.paymentSystemCustom : data.paymentSystem) : "",
         languages: data.hasExtraLang ? data.languages : "",
       });
@@ -113,13 +132,13 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
   return (
     <form onSubmit={submit}>
       {/* ── TWO-COLUMN MAIN GRID ── */}
-      <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2.5">
 
         {/* LEFT COL */}
         <div className="space-y-2.5">
           <div>
-            <label className={lbl}>Ім'я *</label>
-            <input value={data.name} onChange={set("name")} required autoFocus className={f} placeholder="Іван Петренко" />
+            <label className={lbl}>Ім'я</label>
+            <input value={data.name} onChange={set("name")} autoFocus className={f} placeholder="Іван Петренко (необовʼязково)" />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -142,7 +161,14 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={lbl}>Телефон</label>
-              <input value={data.phone} onChange={set("phone")} className={f} placeholder="+380..." />
+              <input
+                value={data.phone}
+                // Phone is stored without spaces / dashes / brackets — cleaned while typing or pasting.
+                onChange={(e) => setData((d) => ({ ...d, phone: cleanPhone(e.target.value) }))}
+                inputMode="tel"
+                className={f}
+                placeholder="+380..."
+              />
             </div>
             <div>
               <label className={lbl}>Email</label>
@@ -163,7 +189,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
               </select>
               {SOURCES.find((s) => s.value === data.source)?.detail && (() => {
                 // Для платного трафіку (Таргет/Автопрозвон) кампанія вибирається зі сторінки «Реклама»
-                const trafficType = normalizeTrafficType(data.source);
+                const trafficType = adTypeOf(data.source);
                 if (!trafficType || customCampaign) {
                   return (
                     <input
@@ -196,8 +222,12 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
             </div>
             <div>
               <label className={lbl}>Статус</label>
-              <select value={data.status} onChange={set("status")} className={`${f} cursor-pointer`}>
-                {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              <select
+                value={statusSelect}
+                onChange={(e) => { setStatusTouched(true); setData((d) => ({ ...d, status: e.target.value })); }}
+                className={`${f} cursor-pointer`}
+              >
+                {statusOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
           </div>
@@ -223,8 +253,13 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={lbl}>Сума (€)</label>
-              <input value={data.amount} onChange={set("amount")} type="number" min="0" step="0.01" className={f} placeholder="0" />
+              <label className={lbl}>Сума</label>
+              <div className="flex gap-1">
+                <input value={data.amount} onChange={(e) => setData((d) => ({ ...d, amount: groupNum(e.target.value) }))} inputMode="decimal" className={`${f} min-w-0 tabular-nums`} placeholder="0" />
+                <select value={data.currency ?? "EUR"} onChange={set("currency")} className={`${f} !w-auto cursor-pointer`} aria-label="Валюта">
+                  {CURRENCIES.map((c) => <option key={c} value={c}>{CURRENCY_SYMBOL[c]} {c}</option>)}
+                </select>
+              </div>
             </div>
             <div>
               <label className={lbl}>Дата створення</label>
@@ -340,7 +375,7 @@ export function LeadForm({ onSave, onCancel, initial }: LeadFormProps) {
       </div>
 
       {/* ── ACTIONS ── */}
-      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--border)]">
+      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--border)] max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:px-4 max-sm:-mb-4 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))] max-sm:bg-[var(--surface)]">
         <button type="button" onClick={onCancel} className="px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer">
           Скасувати
         </button>

@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
+import { ask } from "@/components/ui/dialogs";
+import ListPager, { usePager } from "@/components/ui/ListPager";
 
 type CampaignStatus = "DRAFT" | "RUNNING" | "PAUSED" | "COMPLETED";
 type RecipientStatus = "PENDING" | "SENDING" | "SENT" | "ERROR" | "NOT_FOUND" | "SKIPPED";
@@ -47,6 +49,8 @@ const campaignStatusCfg: Record<CampaignStatus, { label: string; cls: string }> 
   PAUSED:    { label: "Пауза",     cls: "text-yellow-400 bg-yellow-400/10" },
   COMPLETED: { label: "Завершено", cls: "text-blue-400 bg-blue-400/10" },
 };
+
+const EMPTY: never[] = [];
 
 export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -177,6 +181,8 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
     e.target.value = "";
   }
 
+  const pager = usePager(campaign?.recipients ?? EMPTY, "recipients");
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
@@ -257,8 +263,8 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
           {(campaign.status === "RUNNING" || campaign.status === "PAUSED") && (
             <button
-              onClick={() => {
-                if (confirm("Завершити кампанію?")) statusMut.mutate({ status: "COMPLETED" });
+              onClick={async () => {
+                if (await ask("Завершити кампанію?")) statusMut.mutate({ status: "COMPLETED" });
               }}
               disabled={statusMut.isPending}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border)] text-xs sm:text-sm text-[var(--text-muted)] hover:text-blue-400 hover:border-blue-400/40 transition-colors whitespace-nowrap active:scale-95"
@@ -280,8 +286,8 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
             </button>
           ) : campaign.status === "COMPLETED" ? (
             <button
-              onClick={() => {
-                if (confirm("Перезапустити? Всі відправлені зберігаються, тільки помилки скинуться.")) {
+              onClick={async () => {
+                if (await ask("Перезапустити? Всі відправлені зберігаються, тільки помилки скинуться.")) {
                   statusMut.mutate({ status: "RUNNING", resetQueue: true });
                 }
               }}
@@ -422,7 +428,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                 </tr>
               </thead>
               <tbody>
-                {recipients.map((r) => {
+                {pager.visible.map((r) => {
                   const cfg = recipientStatusConfig[r.status];
                   const Icon = cfg.icon;
                   return (
@@ -505,7 +511,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
             {/* Mobile cards */}
             <div className="sm:hidden divide-y divide-[var(--border)]">
-              {recipients.map((r) => {
+              {pager.visible.map((r) => {
                 const cfg = recipientStatusConfig[r.status];
                 const Icon = cfg.icon;
                 return (
@@ -583,6 +589,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                 );
               })}
             </div>
+            <ListPager pager={pager} noun="отримувачів" />
           </>
         )}
       </div>

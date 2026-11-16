@@ -6,7 +6,9 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Plus, Send, Trash2, Play, Pause, CheckCircle2, Clock } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { timeAgo } from "@/lib/timeAgo";
+import { ask } from "@/components/ui/dialogs";
+import ListPager, { usePager } from "@/components/ui/ListPager";
 
 type CampaignStatus = "DRAFT" | "RUNNING" | "PAUSED" | "COMPLETED";
 type RecipientStatus = "PENDING" | "SENDING" | "SENT" | "ERROR" | "NOT_FOUND" | "SKIPPED";
@@ -65,6 +67,7 @@ export default function CampaignsPage() {
     queryFn: () => fetch("/api/campaigns").then((r) => r.json()),
     refetchInterval: 5000,
   });
+  const pager = usePager(campaigns, "bot-campaigns");
 
   const createMut = useMutation({
     mutationFn: (name: string) =>
@@ -163,7 +166,7 @@ export default function CampaignsPage() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {campaigns.map((c) => {
+            {pager.visible.map((c) => {
               const cfg = statusConfig[c.status];
               const total = c._count.recipients;
               const sent = c.recipients.filter((r) => r.status === "SENT").length;
@@ -198,7 +201,7 @@ export default function CampaignsPage() {
                     )}
                     <div className="flex items-center gap-1 text-xs text-[var(--text-dim)] mt-1.5">
                       <Clock size={11} />
-                      {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
+                      {timeAgo(c.createdAt)}
                     </div>
                   </div>
 
@@ -228,8 +231,8 @@ export default function CampaignsPage() {
                     )}
                     <button
                       title="Видалити"
-                      onClick={() => {
-                        if (confirm("Видалити кампанію?")) deleteMut.mutate(c.id);
+                      onClick={async () => {
+                        if (await ask("Видалити кампанію?")) deleteMut.mutate(c.id);
                       }}
                       className="p-2 rounded-xl hover:bg-red-400/10 text-[var(--text-muted)] hover:text-red-400 transition-colors active:scale-90"
                     >
@@ -239,6 +242,7 @@ export default function CampaignsPage() {
                 </div>
               );
             })}
+            <ListPager pager={pager} noun="кампаній" className="border-t-0 rounded-xl border border-[var(--border)] bg-[var(--surface)]" />
           </div>
         )}
       </div>

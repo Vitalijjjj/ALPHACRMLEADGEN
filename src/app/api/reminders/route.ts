@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { leadDisplayName } from "@/lib/leadOptions";
+import { formatMoney } from "@/lib/currency";
 import { db } from "@/lib/db";
 
 const ALL_UPSELL = ["Google Ads", "Target Ads", "SEO", "Google Maps", "Branding", "TikTok Ads", "Graphic Design"];
@@ -29,11 +31,11 @@ export async function GET(_req: NextRequest) {
   // ── Task reminders (generic) ──
   const tasks = await db.task.findMany({
     where: { remindAt: { lte: now }, remindSent: false },
-    include: { lead: { select: { name: true } } },
+    include: { lead: { select: { name: true, number: true, phone: true } } },
   });
 
   for (const task of tasks) {
-    const who = task.lead ? ` (${task.lead.name})` : "";
+    const who = task.lead ? ` (${leadDisplayName(task.lead)})` : "";
     const ok = await sendTelegram(
       `🔔 <b>Нагадування про задачу</b>\n\n` +
       `📋 ${task.title}${who}\n` +
@@ -55,7 +57,7 @@ export async function GET(_req: NextRequest) {
   for (const lead of leadsGeneric) {
     const ok = await sendTelegram(
       `🔔 <b>Нагадування про ліда</b>\n\n` +
-      `👤 ${lead.name}\n` +
+      `👤 ${leadDisplayName(lead)}\n` +
       (lead.status ? `📊 Статус: ${lead.status}\n` : "") +
       (lead.instagram ? `📸 @${lead.instagram}\n` : "") +
       (lead.telegram ? `✈️ @${lead.telegram}\n` : "") +
@@ -81,12 +83,12 @@ export async function GET(_req: NextRequest) {
     const lines = [
       `🔔 <b>Нагадування по ліду</b>`,
       ``,
-      `<b>Лід:</b> ${lead.name}`,
+      `<b>Угода:</b> ${leadDisplayName(lead)}`,
       lead.instagram   ? `<b>Instagram:</b> @${lead.instagram}` : null,
       lead.telegram    ? `<b>Telegram:</b> @${lead.telegram}` : null,
       lead.phone       ? `<b>Телефон:</b> ${lead.phone}` : null,
       lead.service     ? `<b>Послуга:</b> ${lead.service}` : null,
-      lead.amount      ? `<b>Сума:</b> €${lead.amount}` : null,
+      lead.amount      ? `<b>Сума:</b> ${formatMoney(lead.amount, lead.currency)}` : null,
       `<b>Коли запушити:</b> ${pushDate}`,
       lead.projectDeadline ? `<b>Термін:</b> ${lead.projectDeadline}` : null,
       lead.siteStructure   ? `\n<b>Структура сайту:</b>\n${lead.siteStructure}` : null,

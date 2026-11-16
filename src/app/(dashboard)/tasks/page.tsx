@@ -1,100 +1,92 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import { Plus, AlertTriangle, Clock } from "lucide-react";
+import { startOfMonth, subMonths } from "date-fns";
+import { CalendarDays, Columns3, List, Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/modal";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import LeadDrawer from "@/components/leads/LeadDrawer";
-import { format, isPast } from "date-fns";
-import { uk } from "date-fns/locale";
+import TasksTable from "@/components/tasks/TasksTable";
+import TasksBoard from "@/components/tasks/TasksBoard";
+import TasksCalendar from "@/components/tasks/TasksCalendar";
+import { useTaskActions, BELL_KEY } from "@/components/tasks/useTaskActions";
+import { bucketOf, sortDone, sortOpen, localDate, type TaskItem } from "@/components/tasks/taskUtils";
+import { inMonth } from "@/components/tasks/taskViews";
+import { leadDisplayName } from "@/lib/leadOptions";
+import { useCrmSettings } from "@/lib/useCrmSettings";
+import { useAccess } from "@/lib/useAccess";
+import { canPage } from "@/lib/access";
+import { toastError } from "@/components/ui/toast";
+import TaskSearchFilter, { EMPTY_TASK_FILTER, ME, NOBODY, type SavedTaskFilter, type TaskFilter } from "@/components/tasks/TaskSearchFilter";
 
-interface Task {
-  id: string;
-  title: string;
-  description: string | null;
-  deadline: string | null;
-  status: string;
-  priority: string;
-  assignee: string | null;
-  lead: { id: string; name: string } | null;
-  deal: { id: string; company: string | null } | null;
+type View = "list" | "board" | "calendar";
+
+const PREFS_KEY = "tasks-view-v2";
+const SAVED_KEY = "tasks-saved-filters";
+const ME_KEY = "tasks-me";
+const DAY = 86_400_000;
+
+function load<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function save(key: string, v: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private window */ }
 }
 
-const COLUMNS = [
-  {
-    id: "TODO",
-    label: "To Do",
-    color: "#6b7280",
-    glow: "rgba(107,114,128,0.15)",
-    border: "rgba(107,114,128,0.25)",
-    bg: "rgba(107,114,128,0.04)",
-    dot: "#6b7280",
-  },
-  {
-    id: "IN_PROGRESS",
-    label: "In Progress",
-    color: "#22d3ee",
-    glow: "rgba(34,211,238,0.15)",
-    border: "rgba(34,211,238,0.25)",
-    bg: "rgba(34,211,238,0.04)",
-    dot: "#22d3ee",
-  },
-  {
-    id: "DONE",
-    label: "Виконано",
-    color: "#22c55e",
-    glow: "rgba(34,197,94,0.15)",
-    border: "rgba(34,197,94,0.25)",
-    bg: "rgba(34,197,94,0.04)",
-    dot: "#22c55e",
-  },
-];
-
-const PRIORITY_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  LOW:    { label: "Низький",    color: "#6b7280", bg: "rgba(107,114,128,0.12)" },
-  MEDIUM: { label: "Середній",  color: "#C98C0A",  bg: "rgba(201,140,10,0.12)" },
-  HIGH:   { label: "Високий",   color: "#f97316",  bg: "rgba(249,115,22,0.12)" },
-  URGENT: { label: "Терміново", color: "#ef4444",  bg: "rgba(239,68,68,0.14)" },
-};
-
-const ASSIGNEES = ["Всі", "Артур"] as const;
-type AssigneeFilter = typeof ASSIGNEES[number];
-
+// Tasks: «Список» / «Терміни» (board by deadline) / «Календар» + the extended search (who, status, period, type, deadline, funnel).
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
+  const qc = useQueryClient();
+  const { settings } = useCrmSettings();
+  const { access } = useAccess();
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>("Всі");
+  const [create, setCreate] = useState<{ deadline?: string } | null>(null);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+
+  const [view, setView] = useState<View>("list");
+  const [filter, setFilter] = useState<TaskFilter>(EMPTY_TASK_FILTER);
+  const [saved, setSaved] = useState<SavedTaskFilter[]>([]);
+  const [q, setQ] = useState("");
+  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [meName, setMeName] = useState("");            // owner: who «я» is among the assignees
+  const [ready, setReady] = useState(false);
+
+  const isAdmin = !!access && (access.owner || canPage(access, "settings"));
+
+  // remembered view + filter (per browser)
+  useEffect(() => {
+    const p = load(PREFS_KEY, { view: "list" as View, filter: EMPTY_TASK_FILTER });
+    /* eslint-disable react-hooks/set-state-in-effect -- read once from localStorage */
+    setView(p.view);
+    setFilter({ ...EMPTY_TASK_FILTER, ...p.filter });
+    setSaved(load(SAVED_KEY, { list: [] as SavedTaskFilter[] }).list);
+    setMeName(load(ME_KEY, { name: "" }).name);
+    setReady(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+  useEffect(() => {
+    if (ready) save(PREFS_KEY, { view, filter });
+  }, [ready, view, filter]);
+  const saveFilters = (list: SavedTaskFilter[]) => { setSaved(list); save(SAVED_KEY, { list }); };
 
   const fetchTasks = useCallback(async () => {
     const res = await fetch("/api/tasks");
-    const data: Task[] = await res.json();
-    setTasks(data);
+    if (res.ok) setTasks(await res.json());
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load
     fetchTasks();
   }, [fetchTasks]);
 
-  async function onDragEnd(result: DropResult) {
-    if (!result.destination) return;
-    const taskId = result.draggableId;
-    const newStatus = result.destination.droppableId;
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.status === newStatus) return;
-
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-    );
-    await fetch(`/api/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
-  }
+  const actions = useTaskActions(fetchTasks);
 
   async function createTask(data: Record<string, unknown>) {
     const res = await fetch("/api/tasks", {
@@ -102,289 +94,168 @@ export default function TasksPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (res.ok) {
-      setShowCreate(false);
+    if (!res.ok) return toastError("Не вдалося створити задачу");
+    setCreate(null);
+    qc.invalidateQueries({ queryKey: BELL_KEY });
+    fetchTasks();
+  }
+
+  async function patch(t: TaskItem, body: Record<string, unknown>, local: Partial<TaskItem>) {
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...local } : x)));
+    const res = await fetch(`/api/tasks/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      toastError(res.status === 403 ? "Твоя роль не дозволяє змінювати цю угоду" : "Не вдалося зберегти");
       fetchTasks();
+      return;
     }
+    qc.invalidateQueries({ queryKey: BELL_KEY });
   }
 
-  async function deleteTask(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-    await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+  function toggle(t: TaskItem, done: boolean) {
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: done ? "DONE" : "TODO", completedAt: done ? new Date().toISOString() : null } : x)));
+    actions.setDone(t, t.lead, done);
   }
+  const move = (t: TaskItem, d: Date | null) => patch(t, { deadline: d ? d.toISOString() : null }, { deadline: d ? d.toISOString() : null });
+  const assign = (t: TaskItem, a: string | null) => patch(t, { assignee: a }, { assignee: a });
+  const openLead = (t: TaskItem) => { if (t.lead) setOpenLeadId(t.lead.id); };
+  const calendarFor = (t: TaskItem) => {
+    const cal = t.lead && settings.tasks.rules.find((r) => r.id === t.autoRuleId)?.calendar;
+    return cal ? () => actions.openCalendar(t, t.lead!) : undefined;
+  };
 
-  const visibleTasks = assigneeFilter === "Всі"
-    ? tasks
-    : tasks.filter((t) => t.assignee === assigneeFilter);
+  // who is «я»
+  const people = [...new Set([...settings.tasks.assignees, ...tasks.map((t) => t.assignee).filter((a): a is string => !!a)])];
+  const me = access?.owner ? (meName && people.includes(meName) ? meName : settings.tasks.defaultAssignee) : access?.name ?? "";
 
-  const PRIORITY_ORDER: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-  const byStatus = (status: string) =>
-    visibleTasks
-      .filter((t) => t.status === status)
-      .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99));
-  const totalDone = visibleTasks.filter((t) => t.status === "DONE").length;
-  const totalOverdue = visibleTasks.filter(
-    (t) => t.status !== "DONE" && t.deadline && isPast(new Date(t.deadline))
-  ).length;
+  // ── filters ──
+  const needle = q.trim().toLowerCase();
+  const firstFunnel = settings.funnels[0]?.id ?? "main";
+  const base = tasks.filter((t) => {
+    // others see only their own tasks + nobody's
+    if (!isAdmin) { if (t.assignee && t.assignee !== me) return false; }
+    else if (filter.who.length && !filter.who.some((w) => (w === ME ? t.assignee === me : w === NOBODY ? !t.assignee : t.assignee === w))) return false;
+    if (filter.kind !== "all" && (filter.kind === "auto") !== !!t.autoRuleId) return false;
+    if (filter.funnels.length && !filter.funnels.includes(t.lead ? t.lead.funnelId ?? firstFunnel : "-")) return false;
+    if (needle) {
+      const hay = `${t.title} ${t.lead ? `${leadDisplayName(t.lead)} ${t.lead.number} ${t.lead.name}` : ""}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+  const thisMonth = startOfMonth(new Date());
+  const periodOk = (t: TaskItem) => {
+    const at = t.status === "DONE" ? t.completedAt ?? t.deadline : t.deadline;
+    if (filter.period === "all") return true;
+    if (filter.period === "month") return inMonth(at, thisMonth);
+    if (filter.period === "prev") return inMonth(at, subMonths(thisMonth, 1));
+    if (!at) return false;
+    const d = localDate(new Date(at));
+    return (!filter.from || d >= filter.from) && (!filter.to || d <= filter.to);
+  };
+  // «Термін» — about open tasks; done ones pass (they are shown only with «Виконані / Усі»)
+  const dueOk = (t: TaskItem) => {
+    if (filter.due === "any" || t.status === "DONE") return true;
+    if (filter.due === "none") return !t.deadline;
+    const b = bucketOf(t.deadline);
+    if (filter.due === "overdue") return b === "overdue";
+    if (filter.due === "today") return b === "today";
+    return !!t.deadline && b !== "overdue" && new Date(t.deadline).getTime() - Date.parse(new Date().toDateString()) < 7 * DAY;
+  };
+  const scoped = base.filter((t) => periodOk(t) && dueOk(t));
+  const open = sortOpen(scoped.filter((t) => t.status !== "DONE"));
+  const done = sortDone(scoped.filter((t) => t.status === "DONE"));
+  const listRows = filter.status === "open" ? open : filter.status === "done" ? done : [...open, ...done];
+
+  const allOpen = base.filter((t) => t.status !== "DONE");
+  const overdue = allOpen.filter((t) => bucketOf(t.deadline) === "overdue").length;
+  const today = allOpen.filter((t) => bucketOf(t.deadline) === "today").length;
+  const mineOnly = !isAdmin || (filter.who.length === 1 && filter.who[0] === ME);
+
+  const seg = (on: boolean) =>
+    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer ${on ? "bg-[var(--accent)] text-black shadow-[0_4px_14px_-6px_var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-white/[0.04]"}`;
+  const group = "flex items-center gap-0.5 p-0.5 rounded-xl border border-[var(--border)] bg-[var(--surface)]";
 
   return (
-    <div className="p-3 sm:p-6 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-lg font-semibold text-[var(--text)]">Задачі</h1>
+    <div className="p-3 sm:p-6 space-y-4">
+      {/* header */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="mr-auto min-w-0">
+          <h1 className="text-lg font-semibold text-[var(--text)]">{mineOnly ? "Мої задачі" : filter.who.length ? "Задачі" : "Усі задачі"}</h1>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            {visibleTasks.length} задач · {totalDone} виконано
-            {totalOverdue > 0 && (
-              <span style={{ color: "#ef4444" }}> · {totalOverdue} прострочено</span>
-            )}
+            {allOpen.length} в роботі
+            {overdue > 0 && <span className="text-red-400"> · {overdue} прострочено</span>}
+            {today > 0 && <span className="text-amber-400"> · {today} на сьогодні</span>}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-3 py-2 text-black text-sm rounded-lg transition-opacity hover:opacity-80 cursor-pointer font-semibold"
-          style={{ background: "var(--accent)" }}
-        >
-          <Plus size={15} /> Нова задача
+        {overdue > 0 && (
+          <button onClick={() => { setView("list"); setFilter({ ...filter, status: "open", due: "overdue", period: "all" }); }}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-medium border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/15 cursor-pointer" title="Протерміновані">
+            <span className="min-w-5 h-5 px-1 rounded-md bg-red-500 text-white text-[11px] font-bold flex items-center justify-center tabular-nums">{overdue > 99 ? "99+" : overdue}</span>
+            <span className="hidden sm:inline">Протерміновані</span><span className="sm:hidden">Простр.</span>
+          </button>
+        )}
+        <button onClick={() => setCreate({})}
+          className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 text-black text-sm rounded-xl hover:brightness-110 cursor-pointer font-semibold shrink-0 transition-[filter]"
+          style={{ background: "var(--accent)" }} aria-label="Нова задача">
+          <Plus size={15} /> <span className="hidden sm:inline">Нова задача</span><span className="sm:hidden">Задача</span>
         </button>
       </div>
 
-      {/* Assignee filter tabs */}
-      <div className="flex gap-1.5 mb-4">
-        {ASSIGNEES.map((a) => {
-          const count = a === "Всі" ? tasks.length : tasks.filter((t) => t.assignee === a).length;
-          const active = assigneeFilter === a;
-          return (
-            <button
-              key={a}
-              onClick={() => setAssigneeFilter(a)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
-              style={{
-                background: active ? "var(--accent)" : "var(--surface)",
-                color: active ? "#000" : "var(--text-muted)",
-                border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-              }}
-            >
-              {a}
-              <span
-                className="px-1 py-0.5 rounded text-xs font-bold"
-                style={{
-                  background: active ? "rgba(0,0,0,0.2)" : "var(--surface-2)",
-                  color: active ? "#000" : "var(--text-muted)",
-                }}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+      {/* toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className={`${group} w-full sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none [&>button]:justify-center`}>
+          <button onClick={() => setView("list")} className={seg(view === "list")}><List size={13} />Список</button>
+          <button onClick={() => setView("board")} className={seg(view === "board")}><Columns3 size={13} />Терміни</button>
+          <button onClick={() => setView("calendar")} className={seg(view === "calendar")}><CalendarDays size={13} />Календар</button>
+        </div>
+
+        <TaskSearchFilter
+          search={q} onSearch={setQ}
+          filter={filter} onApply={setFilter}
+          people={people}
+          funnels={settings.funnels.map((f) => ({ id: f.id, name: f.name }))}
+          admin={isAdmin}
+          saved={saved} onSaved={saveFilters}
+          me={me}
+          onMe={access?.owner ? (n) => { setMeName(n); save(ME_KEY, { name: n }); } : undefined}
+          meOptions={access?.owner ? people : undefined}
+        />
       </div>
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-[var(--text-muted)] text-sm">
-          Завантаження...
-        </div>
+        <div className="py-16 text-center text-[var(--text-muted)] text-sm">Завантаження…</div>
+      ) : view === "list" ? (
+        <TasksTable
+          tasks={listRows}
+          people={people}
+          onToggle={toggle}
+          onDelete={(t) => actions.remove(t)}
+          onOpenLead={openLead}
+          onAssign={assign}
+          calendarFor={calendarFor}
+        />
+      ) : view === "board" ? (
+        <TasksBoard tasks={scoped} showDone={filter.status !== "open"} onToggle={toggle} onMove={move} onOpenLead={openLead} />
       ) : (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-3 sm:gap-4 flex-1 overflow-x-auto pb-2" style={{ touchAction: "pan-x" }}>
-            {COLUMNS.map((col) => {
-              const colTasks = byStatus(col.id);
-              return (
-                <div key={col.id} className="flex flex-col shrink-0" style={{ width: "min(288px, 80vw)" }}>
-                  {/* Column header */}
-                  <div
-                    className="flex items-center justify-between mb-3 px-3 py-2.5 rounded-xl"
-                    style={{
-                      background: `linear-gradient(rgba(13,13,13,0.96), rgba(13,13,13,0.96)) padding-box, linear-gradient(135deg, ${col.border}, rgba(255,255,255,0.03)) border-box`,
-                      border: "1px solid transparent",
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{
-                          background: col.color,
-                          boxShadow: `0 0 6px ${col.color}`,
-                        }}
-                      />
-                      <span
-                        className="text-sm font-semibold"
-                        style={{ color: col.color }}
-                      >
-                        {col.label}
-                      </span>
-                    </div>
-                    <span
-                      className="text-xs font-bold px-2 py-0.5 rounded-lg"
-                      style={{ color: col.color, background: col.glow }}
-                    >
-                      {colTasks.length}
-                    </span>
-                  </div>
-
-                  {/* Droppable column */}
-                  <Droppable droppableId={col.id}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className="flex-1 rounded-xl p-2 space-y-2 min-h-[200px] transition-all duration-200"
-                        style={{
-                          background: snapshot.isDraggingOver
-                            ? col.glow
-                            : "rgba(16,16,16,0.5)",
-                          border: snapshot.isDraggingOver
-                            ? `1px solid ${col.border}`
-                            : "1px solid rgba(255,255,255,0.04)",
-                          boxShadow: snapshot.isDraggingOver
-                            ? `inset 0 0 30px ${col.glow}`
-                            : "none",
-                        }}
-                      >
-                        {colTasks.map((task, index) => {
-                          const isOverdue =
-                            task.status !== "DONE" &&
-                            task.deadline &&
-                            isPast(new Date(task.deadline));
-                          const pCfg = PRIORITY_CFG[task.priority] ?? PRIORITY_CFG.MEDIUM;
-
-                          return (
-                            <Draggable
-                              key={task.id}
-                              draggableId={task.id}
-                              index={index}
-                            >
-                              {(prov, snap) => (
-                                <div
-                                  ref={prov.innerRef}
-                                  {...prov.draggableProps}
-                                  {...prov.dragHandleProps}
-                                  className="rounded-xl p-3 group transition-all"
-                                  style={{
-                                    ...prov.draggableProps.style,
-                                    background:
-                                      "linear-gradient(rgba(20,20,20,0.97), rgba(20,20,20,0.97)) padding-box, linear-gradient(135deg, rgba(201,140,10,0.18), rgba(255,255,255,0.03) 50%, rgba(34,211,238,0.08)) border-box",
-                                    border: "1px solid transparent",
-                                    boxShadow: snap.isDragging
-                                      ? `0 8px 32px rgba(0,0,0,0.6), 0 0 20px ${col.glow}`
-                                      : "0 2px 8px rgba(0,0,0,0.3)",
-                                    transform: snap.isDragging
-                                      ? `${prov.draggableProps.style?.transform ?? ""} rotate(2deg)`
-                                      : prov.draggableProps.style?.transform,
-                                    opacity: task.status === "DONE" ? 0.65 : 1,
-                                  }}
-                                >
-                                  {/* Title */}
-                                  <p
-                                    className={`text-sm font-medium mb-2 ${
-                                      task.status === "DONE"
-                                        ? "line-through text-[var(--text-muted)]"
-                                        : "text-[var(--text)]"
-                                    }`}
-                                  >
-                                    {task.title}
-                                  </p>
-
-                                  {task.description && (
-                                    <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-2">
-                                      {task.description}
-                                    </p>
-                                  )}
-
-                                  {/* Tags row */}
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span
-                                      className="text-xs px-1.5 py-0.5 rounded-md font-medium"
-                                      style={{ color: pCfg.color, background: pCfg.bg }}
-                                    >
-                                      {pCfg.label}
-                                    </span>
-
-                                    {task.deadline && (
-                                      <span
-                                        className="flex items-center gap-1 text-xs"
-                                        style={{
-                                          color: isOverdue ? "#ef4444" : "var(--text-muted)",
-                                        }}
-                                      >
-                                        {isOverdue ? (
-                                          <AlertTriangle size={10} />
-                                        ) : (
-                                          <Clock size={10} />
-                                        )}
-                                        {format(new Date(task.deadline), "d MMM", { locale: uk })}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Assignee badge */}
-                                  {task.assignee && (
-                                    <span
-                                      className="inline-block text-xs px-1.5 py-0.5 rounded-md font-medium mb-1.5"
-                                      style={{
-                                        background: "rgba(201,140,10,0.15)",
-                                        color: "#C98C0A",
-                                      }}
-                                    >
-                                      {task.assignee}
-                                    </span>
-                                  )}
-
-                                  {/* Lead / Deal + Delete */}
-                                  <div className="flex items-center justify-between mt-2">
-                                    <div className="text-xs text-[var(--text-muted)] truncate flex-1">
-                                      {task.lead && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setOpenLeadId(task.lead!.id); }}
-                                          className="flex items-center gap-1 hover:text-[var(--accent)] transition-colors cursor-pointer max-w-full truncate"
-                                        >
-                                          <span
-                                            className="w-1.5 h-1.5 rounded-full shrink-0"
-                                            style={{ background: "var(--accent)" }}
-                                          />
-                                          {task.lead.name}
-                                        </button>
-                                      )}
-                                      {task.deal && (
-                                        <span className="flex items-center gap-1">
-                                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#22d3ee]" />
-                                          {task.deal.company ?? "Угода"}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <button
-                                      onClick={(e) => deleteTask(task.id, e)}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-muted)] hover:text-red-400 text-xs cursor-pointer shrink-0 ml-2"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </Draggable>
-                          );
-                        })}
-                        {provided.placeholder}
-
-                        {colTasks.length === 0 && !snapshot.isDraggingOver && (
-                          <div className="flex items-center justify-center h-20 text-xs text-[var(--text-muted)] opacity-40">
-                            Перетягни сюди
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </Droppable>
-                </div>
-              );
-            })}
-          </div>
-        </DragDropContext>
+        <TasksCalendar
+          tasks={base}
+          month={month}
+          onMonth={setMonth}
+          onToggle={toggle}
+          onOpen={openLead}
+          onCreate={(d) => setCreate({ deadline: `${localDate(d)}T10:00` })}
+        />
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Нова задача" size="sm">
-        <TaskForm onSave={createTask} onCancel={() => setShowCreate(false)} />
+      <Modal open={!!create} onClose={() => setCreate(null)} title="Нова задача" size="sm">
+        {create && <TaskForm onSave={createTask} onCancel={() => setCreate(null)} initialDeadline={create.deadline} />}
       </Modal>
+
+      {actions.modal}
 
       {openLeadId && (
         <LeadDrawer leadId={openLeadId} onClose={() => setOpenLeadId(null)} onUpdate={fetchTasks} />
